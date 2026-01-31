@@ -16,3 +16,6 @@ backend/app/data/uploads/
 data/
 uploads/
 faiss_index/
+
+# OS
+.DS_Store

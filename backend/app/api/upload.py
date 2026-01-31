@@ -1,19 +1,23 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pathlib import Path
 import shutil
+import traceback
+
 from app.services.document_loader import load_text_from_file
 from app.utils.text_cleaner import clean_text
 from app.services.chunker import chunk_text
-from app.services.embeddings import generate_embeddings
-from app.services.vector_store import FaissVectorStore
+from app.services.embeddings import EmbeddingService
+from app.services.vector_store import vector_store
 
-router = APIRouter()
+router = APIRouter(prefix="/upload", tags=["Upload"])
 
 UPLOAD_DIR = Path("app/data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+embedding_service = EmbeddingService()
 
-@router.post("/upload")
+
+@router.post("/")
 async def upload_document(file: UploadFile = File(...)):
     if not file.filename.lower().endswith((".txt", ".pdf")):
         raise HTTPException(
@@ -23,33 +27,45 @@ async def upload_document(file: UploadFile = File(...)):
 
     file_path = UPLOAD_DIR / file.filename
 
-    # 1️⃣ Save file
-    with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
     try:
-        # 2️⃣ Process file
+        # 1️⃣ Save file
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # 2️⃣ Load & clean text
         raw_text = load_text_from_file(file_path)
         cleaned_text = clean_text(raw_text)
+
+        if not cleaned_text.strip():
+            raise ValueError("No text extracted from document")
+
+        # 3️⃣ Chunk text
         chunks = chunk_text(cleaned_text)
+        if not chunks:
+            raise ValueError("No chunks created")
 
-        # 3️⃣ Embeddings
-        embeddings = generate_embeddings(chunks)
+        # 4️⃣ Generate embeddings
+        embeddings = embedding_service.embed_texts(chunks)
 
+        # 5️⃣ Metadata
         metadatas = [
             {"text": chunk, "source": file.filename}
             for chunk in chunks
         ]
 
-        vector_store = FaissVectorStore(dim=len(embeddings[0]))
+        # 6️⃣ Store in FAISS (SHARED INSTANCE)
         vector_store.add(embeddings, metadatas)
 
+        return {
+            "message": "Document indexed successfully",
+            "chunks_added": len(chunks)
+        }
+
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
     finally:
-        # 4️⃣ Delete uploaded file (SAFE CLEANUP)
+        # 7️⃣ Cleanup uploaded file
         if file_path.exists():
             file_path.unlink()
-
-    return {
-        "message": "Document indexed and cleaned up successfully",
-        "chunks_added": len(chunks)
-    }
