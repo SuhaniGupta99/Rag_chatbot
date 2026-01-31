@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Vector store & uploads
+backend/app/data/faiss_index/
+backend/app/data/uploads/
+
+# App data (uploads, FAISS index)
+data/
+uploads/
+faiss_index/
