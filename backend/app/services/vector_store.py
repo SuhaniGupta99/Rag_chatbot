@@ -3,11 +3,14 @@ import pickle
 from pathlib import Path
 import numpy as np
 
-DATA_DIR = Path("app/data/faiss_index")
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = BASE_DIR / "data" / "faiss_index"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 
 INDEX_FILE = DATA_DIR / "index.faiss"
 META_FILE = DATA_DIR / "metadata.pkl"
+
 
 DEFAULT_DIM = 384  # MiniLM embedding size
 
@@ -20,6 +23,18 @@ class FaissVectorStore:
 
         if INDEX_FILE.exists() and META_FILE.exists():
             self._load()
+
+    # 🧹 VERY IMPORTANT
+    def clear(self):
+        print("🧹 Clearing FAISS index & metadata")
+
+        self.index = faiss.IndexFlatL2(self.dim)
+        self.metadata = []
+
+        if INDEX_FILE.exists():
+            INDEX_FILE.unlink()
+        if META_FILE.exists():
+            META_FILE.unlink()
 
     def add(self, embeddings, metadatas):
         assert len(embeddings) == len(metadatas)

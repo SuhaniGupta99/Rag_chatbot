@@ -45,7 +45,7 @@ async def upload_document(file: UploadFile = File(...)):
             raise ValueError("No chunks created")
 
         # 4️⃣ Generate embeddings
-        embeddings = embedding_service.embed_texts(chunks)
+        embeddings = embedding_service.embed_documents(chunks)
 
         # 5️⃣ Metadata
         metadatas = [
@@ -53,11 +53,14 @@ async def upload_document(file: UploadFile = File(...)):
             for chunk in chunks
         ]
 
-        # 6️⃣ Store in FAISS (SHARED INSTANCE)
+        # 🚨 CRITICAL FIX — CLEAR OLD DOCUMENT
+        vector_store.clear()
+
+        # 6️⃣ Store in FAISS
         vector_store.add(embeddings, metadatas)
 
         return {
-            "message": "Document indexed successfully",
+            "message": "Document indexed successfully (previous document removed)",
             "chunks_added": len(chunks)
         }
 

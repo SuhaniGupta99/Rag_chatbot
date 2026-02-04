@@ -1,13 +1,18 @@
 from sentence_transformers import SentenceTransformer
-from typing import List
 
 
 class EmbeddingService:
-    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
-        self.model = SentenceTransformer(model_name)
+    def __init__(self):
+        self.model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-    def embed_text(self, text: str):
-        return self.model.encode(text)
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """
+        Generate embeddings for document chunks
+        """
+        return self.model.encode(texts, convert_to_numpy=True).tolist()
 
-    def embed_texts(self, texts: List[str]):
-        return self.model.encode(texts)
+    def embed_query(self, text: str) -> list[float]:
+        """
+        Generate embedding for a single query
+        """
+        return self.model.encode(text, convert_to_numpy=True).tolist()
