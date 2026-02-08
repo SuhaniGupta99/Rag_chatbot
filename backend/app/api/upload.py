@@ -72,3 +72,5 @@ async def upload_document(file: UploadFile = File(...)):
         # 7️⃣ Cleanup uploaded file
         if file_path.exists():
             file_path.unlink()
+
+            
