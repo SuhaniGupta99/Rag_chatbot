@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from app.services.embeddings import EmbeddingService
 from app.services.vector_store import vector_store
 from app.services.llm import LLMService
+from app.services.reranker import RerankerService
 
 router = APIRouter()
 
@@ -19,45 +20,93 @@ def chat(request: ChatRequest):
 
         embedding_service = EmbeddingService()
         llm_service = LLMService()
-        print("STEP 2: Services ready")
+        reranker = RerankerService()
 
+        # 🔹 Embed query
         query_embedding = embedding_service.embed_query(request.question)
-        print("STEP 3: Query embedding length:", len(query_embedding))
 
-        print("STEP 4: FAISS index size:", vector_store.index.ntotal)
+        print("STEP 2: FAISS index size:", vector_store.index.ntotal)
 
-        matches = vector_store.search(query_embedding, request.top_k)
-        print("STEP 5: FAISS matches:", matches)
+        # 🔹 Retrieve more candidates initially
+        initial_matches = vector_store.search(query_embedding, top_k=8)
 
-        if not matches:
+        if not initial_matches:
+            print("No matches found in FAISS")
+
+            # Fallback to general knowledge
+            general_answer = llm_service.generate_answer(
+                question=request.question,
+                context=""
+            )
+
             return {
                 "question": request.question,
-                "answer": "No relevant information found.",
+                "answer": (
+                    "No such information is present in the uploaded documents. "
+                    "However, based on general knowledge:\n\n"
+                    + general_answer
+                ),
                 "sources": []
             }
 
-        # 🔹 Build context
-        context = "\n\n".join(m["text"] for m in matches)
-        print("STEP 6: Context length (before trim):", len(context))
+        # 🔹 Rerank results
+        reranked_matches = reranker.rerank(
+            request.question,
+            initial_matches
+        )
 
-        # 🚀 CRITICAL SPEED FIX
+        # Keep best top_k after reranking
+        matches = reranked_matches[:request.top_k]
+
+        # 🔎 Similarity threshold check
+        SIMILARITY_THRESHOLD = 0.8  # Adjust if needed
+
+        best_score = matches[0]["score"]
+        print("Best similarity score (FAISS):", best_score)
+
+        if best_score > SIMILARITY_THRESHOLD:
+            print("Weak retrieval detected → Falling back to general knowledge")
+
+            general_answer = llm_service.generate_answer(
+                question=request.question,
+                context=""
+            )
+
+            return {
+                "question": request.question,
+                "answer": (
+                    "No such information is present in the uploaded documents. "
+                    "However, based on general knowledge:\n\n"
+                    + general_answer
+                ),
+                "sources": []
+            }
+
+        # 🔹 Build context from reranked matches
+        context = "\n\n".join(m["text"] for m in matches)
+
         MAX_CONTEXT_CHARS = 2000
         context = context[:MAX_CONTEXT_CHARS]
-        print("STEP 6.1: Context length (after trim):", len(context))
 
-        print("STEP 7: Sending prompt to LLM...")
+        print("Sending context to LLM. Context length:", len(context))
 
+        # 🔹 Generate final answer
         answer = llm_service.generate_answer(
             question=request.question,
             context=context
         )
 
-        print("STEP 8: LLM response received")
-
         return {
             "question": request.question,
             "answer": answer,
-            "sources": list(set(m["source"] for m in matches))
+            "sources": [
+                {
+                    "source": m["source"],
+                    "faiss_score": m["score"],
+                    "rerank_score": m.get("rerank_score")
+                }
+                for m in matches
+            ]
         }
 
     except Exception as e:

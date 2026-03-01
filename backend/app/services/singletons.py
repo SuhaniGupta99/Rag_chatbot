@@ -6,7 +6,7 @@ from app.services.llm import LLMService
 embedding_service = EmbeddingService()
 vector_store = FaissVectorStore(dim=384)
 llm_service = LLMService(
-    model="inyllama"
+    model="llama3:8b-instruct-q4_0"
 )
 
 

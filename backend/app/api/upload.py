@@ -53,15 +53,15 @@ async def upload_document(file: UploadFile = File(...)):
             for chunk in chunks
         ]
 
-        # 🚨 CRITICAL FIX — CLEAR OLD DOCUMENT
-        vector_store.clear()
+        # 🚀 MULTI-DOCUMENT MODE: DO NOT CLEAR OLD DATA
 
         # 6️⃣ Store in FAISS
         vector_store.add(embeddings, metadatas)
 
         return {
-            "message": "Document indexed successfully (previous document removed)",
-            "chunks_added": len(chunks)
+            "message": "Document indexed successfully",
+            "chunks_added": len(chunks),
+            "total_index_size": vector_store.index.ntotal
         }
 
     except Exception as e:
@@ -72,5 +72,3 @@ async def upload_document(file: UploadFile = File(...)):
         # 7️⃣ Cleanup uploaded file
         if file_path.exists():
             file_path.unlink()
-
-            
