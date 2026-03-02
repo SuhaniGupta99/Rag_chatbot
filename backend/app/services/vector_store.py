@@ -24,6 +24,9 @@ class FaissVectorStore:
         if INDEX_FILE.exists() and META_FILE.exists():
             self._load()
 
+    # =====================================================
+    # 🔹 CLEAR ENTIRE INDEX
+    # =====================================================
     def clear(self):
         print("🧹 Clearing FAISS index & metadata")
         self.index = faiss.IndexFlatL2(self.dim)
@@ -34,6 +37,9 @@ class FaissVectorStore:
         if META_FILE.exists():
             META_FILE.unlink()
 
+    # =====================================================
+    # 🔹 ADD EMBEDDINGS
+    # =====================================================
     def add(self, embeddings, metadatas):
         print("🔥 ADD CALLED")
         print("Embeddings:", len(embeddings))
@@ -49,6 +55,9 @@ class FaissVectorStore:
 
         self._save()
 
+    # =====================================================
+    # 🔹 SEARCH
+    # =====================================================
     def search(self, query_embedding, top_k=3):
         if self.index.ntotal == 0:
             return []
@@ -67,6 +76,58 @@ class FaissVectorStore:
 
         return results
 
+    # =====================================================
+    # 🔥 DELETE SPECIFIC DOCUMENT
+    # =====================================================
+    def delete_document(self, document_id: str):
+        """
+        Remove all chunks belonging to a document
+        and rebuild FAISS index.
+        """
+
+        print(f"🗑 Deleting document: {document_id}")
+
+        # Filter metadata
+        remaining_metadata = [
+            m for m in self.metadata
+            if m.get("document_id") != document_id
+        ]
+
+        # If nothing removed
+        if len(remaining_metadata) == len(self.metadata):
+            print("⚠ Document not found")
+            return False
+
+        # If no documents remain
+        if not remaining_metadata:
+            print("📭 No documents left. Resetting index.")
+            self.index = faiss.IndexFlatL2(self.dim)
+            self.metadata = []
+            self._save()
+            return True
+
+        # Rebuild embeddings
+        from app.services.embeddings import EmbeddingService
+        embedding_service = EmbeddingService()
+
+        texts = [m["text"] for m in remaining_metadata]
+        embeddings = embedding_service.embed_documents(texts)
+        embeddings = np.array(embeddings).astype("float32")
+
+        # Create new index
+        self.index = faiss.IndexFlatL2(self.dim)
+        self.index.add(embeddings)
+
+        self.metadata = remaining_metadata
+
+        self._save()
+
+        print("✅ Document deleted and index rebuilt")
+        return True
+
+    # =====================================================
+    # 🔹 SAVE INDEX
+    # =====================================================
     def _save(self):
         print("💾 Saving FAISS index to:", INDEX_FILE.resolve())
         print("💾 Saving metadata to:", META_FILE.resolve())
@@ -75,6 +136,9 @@ class FaissVectorStore:
         with open(META_FILE, "wb") as f:
             pickle.dump(self.metadata, f)
 
+    # =====================================================
+    # 🔹 LOAD INDEX
+    # =====================================================
     def _load(self):
         print("📦 Loading FAISS index from disk")
         self.index = faiss.read_index(str(INDEX_FILE))

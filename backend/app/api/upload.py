@@ -2,6 +2,8 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from pathlib import Path
 import shutil
 import traceback
+import uuid
+from datetime import datetime
 
 from app.services.document_loader import load_text_from_file
 from app.utils.text_cleaner import clean_text
@@ -19,47 +21,74 @@ embedding_service = EmbeddingService()
 
 @router.post("/")
 async def upload_document(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith((".txt", ".pdf")):
+
+    # ==========================
+    # 🔹 Validate file type
+    # ==========================
+    if not file.filename.lower().endswith((".txt", ".pdf", ".docx", ".pptx")):
         raise HTTPException(
             status_code=400,
-            detail="Only .txt and .pdf files are supported"
+            detail="Only .txt, .pdf, .docx, and .pptx files are supported"
         )
 
     file_path = UPLOAD_DIR / file.filename
 
     try:
-        # 1️⃣ Save file
+        # ==========================
+        # 🔹 1️⃣ Save file temporarily
+        # ==========================
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # 2️⃣ Load & clean text
+        # ==========================
+        # 🔹 2️⃣ Load & clean text
+        # ==========================
         raw_text = load_text_from_file(file_path)
         cleaned_text = clean_text(raw_text)
 
         if not cleaned_text.strip():
             raise ValueError("No text extracted from document")
 
-        # 3️⃣ Chunk text
+        # ==========================
+        # 🔹 3️⃣ Chunk text
+        # ==========================
         chunks = chunk_text(cleaned_text)
+
         if not chunks:
             raise ValueError("No chunks created")
 
-        # 4️⃣ Generate embeddings
+        # ==========================
+        # 🔹 4️⃣ Generate embeddings
+        # ==========================
         embeddings = embedding_service.embed_documents(chunks)
 
-        # 5️⃣ Metadata
-        metadatas = [
-            {"text": chunk, "source": file.filename}
-            for chunk in chunks
-        ]
+        # ==========================
+        # 🔥 5️⃣ Generate document ID
+        # ==========================
+        document_id = str(uuid.uuid4())
 
-        # 🚀 MULTI-DOCUMENT MODE: DO NOT CLEAR OLD DATA
+        # ==========================
+        # 🔥 6️⃣ Build rich metadata
+        # ==========================
+        metadatas = []
 
-        # 6️⃣ Store in FAISS
+        for i, chunk in enumerate(chunks):
+            metadatas.append({
+                "text": chunk,
+                "source": file.filename,
+                "document_id": document_id,
+                "chunk_id": i,
+                "uploaded_at": datetime.utcnow().isoformat()
+            })
+
+        # ==========================
+        # 🚀 7️⃣ Add to FAISS (NO CLEAR)
+        # ==========================
         vector_store.add(embeddings, metadatas)
 
         return {
             "message": "Document indexed successfully",
+            "document_id": document_id,
             "chunks_added": len(chunks),
             "total_index_size": vector_store.index.ntotal
         }
@@ -69,6 +98,8 @@ async def upload_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # 7️⃣ Cleanup uploaded file
+        # ==========================
+        # 🔹 8️⃣ Cleanup temp file
+        # ==========================
         if file_path.exists():
             file_path.unlink()
