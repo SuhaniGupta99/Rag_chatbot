@@ -2,11 +2,20 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import re
 import uuid
+import math
 
 from app.services.embeddings import EmbeddingService
 from app.services.vector_store import vector_store
 from app.services.llm import LLMService
 from app.services.reranker import RerankerService
+
+# ✅ NEW: Evaluation module
+from app.services.evaluation import (
+    compute_context_relevance,
+    compute_faithfulness,
+    compute_answer_relevance,
+    compute_rag_quality
+)
 
 router = APIRouter()
 
@@ -15,7 +24,7 @@ router = APIRouter()
 # =====================================================
 conversation_memory = {}
 MAX_HISTORY_TURNS = 4
-SUMMARY_UPDATE_INTERVAL = 3  # update summary every 3 turns
+SUMMARY_UPDATE_INTERVAL = 3
 
 
 class ChatRequest(BaseModel):
@@ -25,12 +34,11 @@ class ChatRequest(BaseModel):
 
 
 # =====================================================
-# 🔹 FULL Advanced Query Normalization (UNCHANGED)
+# 🔹 FULL Advanced Query Normalization
 # =====================================================
 def normalize_query(question: str) -> str:
     q = question.lower()
 
-    # Word count constraints
     q = re.sub(r"(in|within)\s+\d+\s+words?", "", q)
     q = re.sub(r"in\s+not\s+more\s+than\s+\d+\s+words?", "", q)
     q = re.sub(r"in\s+less\s+than\s+\d+\s+words?", "", q)
@@ -42,48 +50,30 @@ def normalize_query(question: str) -> str:
     q = re.sub(r"\d+\s*-\s*\d+\s*words?", "", q)
 
     instruction_patterns = [
-        r"briefly explain",
-        r"explain briefly",
-        r"explain in detail",
-        r"explain in depth",
-        r"detailed explanation on",
-        r"detailed explanation of",
-        r"detailed explanation",
-        r"provide a detailed explanation",
+        r"briefly explain", r"explain briefly",
+        r"explain in detail", r"explain in depth",
+        r"detailed explanation on", r"detailed explanation of",
+        r"detailed explanation", r"provide a detailed explanation",
         r"give a detailed explanation",
-        r"describe in detail",
-        r"describe briefly",
-        r"describe in depth",
-        r"discuss in detail",
-        r"discuss briefly",
-        r"discuss",
-        r"elaborate on",
-        r"write a short note on",
-        r"give a short note on",
-        r"write a note on",
-        r"write about",
-        r"summarize in detail",
-        r"summarize briefly",
-        r"summarize",
-        r"explain clearly",
-        r"in simple terms",
-        r"in simple language",
-        r"in easy words",
-        r"in simple words",
-        r"step by step",
-        r"with examples",
-        r"along with examples",
-        r"with a diagram",
-        r"compare and contrast",
+        r"describe in detail", r"describe briefly",
+        r"describe in depth", r"discuss in detail",
+        r"discuss briefly", r"discuss",
+        r"elaborate on", r"write a short note on",
+        r"give a short note on", r"write a note on",
+        r"write about", r"summarize in detail",
+        r"summarize briefly", r"summarize",
+        r"explain clearly", r"in simple terms",
+        r"in simple language", r"in easy words",
+        r"in simple words", r"step by step",
+        r"with examples", r"along with examples",
+        r"with a diagram", r"compare and contrast",
         r"differentiate between",
-        r"what do you mean by",
-        r"define",
+        r"what do you mean by", r"define",
     ]
 
     for pattern in instruction_patterns:
         q = re.sub(pattern, "", q)
 
-    # Filler
     q = re.sub(r"please", "", q)
     q = re.sub(r"kindly", "", q)
     q = re.sub(r"tell me", "", q)
@@ -91,7 +81,6 @@ def normalize_query(question: str) -> str:
     q = re.sub(r"can you", "", q)
     q = re.sub(r"could you", "", q)
 
-    # Remove punctuation
     q = re.sub(r"[^\w\s]", "", q)
     q = re.sub(r"\s+", " ", q)
 
@@ -99,7 +88,7 @@ def normalize_query(question: str) -> str:
 
 
 # =====================================================
-# 🔹 Keyword Overlap Scoring
+# 🔹 Keyword Overlap
 # =====================================================
 def keyword_overlap_score(query: str, text: str) -> float:
     query_words = set(query.lower().split())
@@ -110,6 +99,39 @@ def keyword_overlap_score(query: str, text: str) -> float:
 
     overlap = query_words.intersection(text_words)
     return len(overlap) / len(query_words)
+
+
+# =====================================================
+# 🔹 Retrieval Confidence
+# =====================================================
+def compute_retrieval_confidence(matches):
+    if not matches:
+        return 0.0
+
+    top = matches[0]
+
+    faiss_distance = top.get("score", 0)
+    faiss_similarity = 1 / (1 + faiss_distance)
+
+    hybrid_score = top.get("hybrid_score", 0)
+
+    rerank_score = top.get("rerank_score", 0)
+    rerank_soft = 1 / (1 + math.exp(-rerank_score))
+
+    if len(matches) > 1:
+        separation = matches[0]["hybrid_score"] - matches[1]["hybrid_score"]
+        separation_score = max(0, min(separation, 1))
+    else:
+        separation_score = 0.5
+
+    confidence = (
+        0.4 * faiss_similarity +
+        0.3 * hybrid_score +
+        0.2 * rerank_soft +
+        0.1 * separation_score
+    )
+
+    return round(max(0, min(confidence, 1)), 3)
 
 
 # =====================================================
@@ -143,15 +165,10 @@ Conversation:
 @router.post("/chat")
 def chat(request: ChatRequest):
     try:
-        print("STEP 1: Chat request received")
-
         embedding_service = EmbeddingService()
         llm_service = LLMService()
         reranker = RerankerService()
 
-        # =====================================================
-        # 🔹 Session Handling
-        # =====================================================
         session_id = request.session_id or str(uuid.uuid4())
 
         if session_id not in conversation_memory:
@@ -164,25 +181,11 @@ def chat(request: ChatRequest):
         history = session["history"]
         summary = session["summary"]
 
-        # =====================================================
-        # 🔹 Normalize Query
-        # =====================================================
         normalized_question = normalize_query(request.question)
-        print("Normalized query:", normalized_question)
 
-        # =====================================================
-        # 🔥 MEMORY-AWARE RETRIEVAL USING SUMMARY
-        # =====================================================
         retrieval_query = (summary + " " + normalized_question).strip()
-        print("Retrieval query:", retrieval_query)
-
         query_embedding = embedding_service.embed_query(retrieval_query)
 
-        print("FAISS index size:", vector_store.index.ntotal)
-
-        # =====================================================
-        # 🔹 Dense Retrieval
-        # =====================================================
         initial_matches = vector_store.search(query_embedding, top_k=8)
 
         if not initial_matches:
@@ -194,17 +197,15 @@ def chat(request: ChatRequest):
             return {
                 "session_id": session_id,
                 "question": request.question,
-                "answer": (
-                    "No such information is present in the uploaded documents. "
-                    "However, based on general knowledge:\n\n"
-                    + general_answer
-                ),
+                "answer": general_answer,
+                "retrieval_confidence": 0.0,
+                "context_relevance": 0.0,
+                "faithfulness": 0.0,
+                "answer_relevance": 0.0,
+                "rag_quality_score": 0.0,
                 "sources": []
             }
 
-        # =====================================================
-        # 🔹 Hybrid Scoring
-        # =====================================================
         for match in initial_matches:
             keyword_score = keyword_overlap_score(
                 normalized_question,
@@ -213,20 +214,13 @@ def chat(request: ChatRequest):
             match["keyword_score"] = keyword_score
 
             faiss_similarity = 1 / (1 + match["score"])
-
             match["hybrid_score"] = (
                 0.7 * faiss_similarity +
                 0.3 * keyword_score
             )
 
-        initial_matches.sort(
-            key=lambda x: x["hybrid_score"],
-            reverse=True
-        )
+        initial_matches.sort(key=lambda x: x["hybrid_score"], reverse=True)
 
-        # =====================================================
-        # 🔹 Reranking
-        # =====================================================
         reranked_matches = reranker.rerank(
             normalized_question,
             initial_matches
@@ -234,41 +228,11 @@ def chat(request: ChatRequest):
 
         matches = reranked_matches[:request.top_k]
 
-        # =====================================================
-        # 🔹 Confidence Threshold
-        # =====================================================
-        SIMILARITY_THRESHOLD = 1.2
-        best_score = matches[0]["score"]
+        retrieval_confidence = compute_retrieval_confidence(matches)
 
-        print("Best FAISS score:", best_score)
-        print("Best hybrid score:", matches[0]["hybrid_score"])
-
-        if best_score > SIMILARITY_THRESHOLD:
-            general_answer = llm_service.generate_answer(
-                question=request.question,
-                context=""
-            )
-
-            return {
-                "session_id": session_id,
-                "question": request.question,
-                "answer": (
-                    "No such information is present in the uploaded documents. "
-                    "However, based on general knowledge:\n\n"
-                    + general_answer
-                ),
-                "sources": []
-            }
-
-        # =====================================================
-        # 🔹 Build Context
-        # =====================================================
         context = "\n\n".join(m["text"] for m in matches)
         context = context[:2000]
 
-        # =====================================================
-        # 🔹 Inject Summary + Recent Turns
-        # =====================================================
         recent_history = ""
         for turn in history[-MAX_HISTORY_TURNS:]:
             recent_history += f"User: {turn['user']}\n"
@@ -289,9 +253,7 @@ Context from uploaded documents:
 Current Question:
 {request.question}
 
-If the context does not contain relevant information,
-say it is not present in the uploaded documents.
-Otherwise answer clearly and concisely.
+Answer clearly and concisely.
 """
 
         answer = llm_service.generate_answer(
@@ -299,20 +261,39 @@ Otherwise answer clearly and concisely.
             context=full_prompt
         )
 
-        # =====================================================
-        # 🔹 Store Conversation
-        # =====================================================
+        # ===============================
+        # 🔥 RAG Evaluation Metrics
+        # ===============================
+        answer_embedding = embedding_service.embed_query(answer)
+        context_embedding = embedding_service.embed_query(context)
+        question_embedding = embedding_service.embed_query(normalized_question)
+
+        context_relevance = compute_context_relevance(matches)
+
+        faithfulness = compute_faithfulness(
+            answer_embedding,
+            context_embedding
+        )
+
+        answer_relevance = compute_answer_relevance(
+            question_embedding,
+            answer_embedding
+        )
+
+        rag_quality_score = compute_rag_quality(
+            retrieval_confidence,
+            context_relevance,
+            faithfulness,
+            answer_relevance
+        )
+
         history.append({
             "user": request.question,
             "assistant": answer
         })
 
-        # keep only recent turns
         history[:] = history[-MAX_HISTORY_TURNS:]
 
-        # =====================================================
-        # 🔹 Periodically Update Summary
-        # =====================================================
         if len(history) % SUMMARY_UPDATE_INTERVAL == 0:
             update_summary(session_id, llm_service)
 
@@ -321,16 +302,12 @@ Otherwise answer clearly and concisely.
             "question": request.question,
             "answer": answer,
             "summary": session["summary"],
-            "sources": [
-                {
-                    "source": m["source"],
-                    "faiss_score": m["score"],
-                    "keyword_score": m["keyword_score"],
-                    "hybrid_score": m["hybrid_score"],
-                    "rerank_score": m.get("rerank_score"),
-                }
-                for m in matches
-            ],
+            "retrieval_confidence": retrieval_confidence,
+            "context_relevance": context_relevance,
+            "faithfulness": faithfulness,
+            "answer_relevance": answer_relevance,
+            "rag_quality_score": rag_quality_score,
+            "sources": matches
         }
 
     except Exception as e:
