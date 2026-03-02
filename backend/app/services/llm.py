@@ -20,14 +20,13 @@ Context:
 Question:
 {question}
 
-Provide a clear, well-structured answer in 5–7 sentences.
+Provide a clear, well-structured answer.
 """
         else:
-            # General knowledge fallback
             prompt = f"""
 You are a knowledgeable assistant.
 
-Answer the following question clearly and concisely in 5–7 sentences.
+Answer the following question clearly and concisely.
 
 Question:
 {question}
@@ -39,7 +38,7 @@ Question:
             options={
                 "temperature": 0.3,
                 "top_p": 0.9,
-                "num_predict": 400
+                "num_predict": 250
             }
         )
 
