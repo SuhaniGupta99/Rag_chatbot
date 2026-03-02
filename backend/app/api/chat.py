@@ -15,51 +15,24 @@ class ChatRequest(BaseModel):
     top_k: int = 3
 
 
-# 🔹 ULTRA-ROBUST Query Normalization
+# =====================================================
+# 🔹 Advanced Query Normalization
+# =====================================================
 def normalize_query(question: str) -> str:
-    """
-    Advanced normalization for RAG retrieval.
-    Removes instructional / formatting phrases
-    while preserving semantic meaning.
-    """
-
     q = question.lower()
 
-    # ===============================
-    # 🔹 Remove word/length constraints
-    # ===============================
-
-    # in 200 words / within 200 words
+    # Word count constraints
     q = re.sub(r"(in|within)\s+\d+\s+words?", "", q)
-
-    # in not more than 200 words
     q = re.sub(r"in\s+not\s+more\s+than\s+\d+\s+words?", "", q)
-
-    # in less than 200 words
     q = re.sub(r"in\s+less\s+than\s+\d+\s+words?", "", q)
-
-    # in more than 200 words
     q = re.sub(r"in\s+more\s+than\s+\d+\s+words?", "", q)
-
-    # in about 200 words
     q = re.sub(r"in\s+about\s+\d+\s+words?", "", q)
-
-    # in approximately 200 words
     q = re.sub(r"in\s+approximately\s+\d+\s+words?", "", q)
-
-    # minimum / maximum word constraints
     q = re.sub(r"(minimum|max(?:imum)?)\s+\d+\s+words?", "", q)
-
-    # at least / at most 200 words
     q = re.sub(r"at\s+(least|most)\s+\d+\s+words?", "", q)
-
-    # 200-250 words
     q = re.sub(r"\d+\s*-\s*\d+\s*words?", "", q)
 
-    # ===============================
-    # 🔹 Remove instruction phrases
-    # ===============================
-
+    # Instruction phrases
     instruction_patterns = [
         r"briefly explain",
         r"explain briefly",
@@ -102,10 +75,7 @@ def normalize_query(question: str) -> str:
     for pattern in instruction_patterns:
         q = re.sub(pattern, "", q)
 
-    # ===============================
-    # 🔹 Remove polite/filler text
-    # ===============================
-
+    # Filler
     q = re.sub(r"please", "", q)
     q = re.sub(r"kindly", "", q)
     q = re.sub(r"tell me", "", q)
@@ -113,16 +83,27 @@ def normalize_query(question: str) -> str:
     q = re.sub(r"can you", "", q)
     q = re.sub(r"could you", "", q)
 
-    # ===============================
-    # 🔹 Remove punctuation
-    # ===============================
-
+    # Remove punctuation
     q = re.sub(r"[^\w\s]", "", q)
 
     # Normalize whitespace
     q = re.sub(r"\s+", " ", q)
 
     return q.strip()
+
+
+# =====================================================
+# 🔹 Keyword Overlap Scoring (Hybrid Retrieval)
+# =====================================================
+def keyword_overlap_score(query: str, text: str) -> float:
+    query_words = set(query.lower().split())
+    text_words = set(text.lower().split())
+
+    if not query_words:
+        return 0.0
+
+    overlap = query_words.intersection(text_words)
+    return len(overlap) / len(query_words)
 
 
 @router.post("/chat")
@@ -142,7 +123,9 @@ def chat(request: ChatRequest):
 
         print("STEP 2: FAISS index size:", vector_store.index.ntotal)
 
-        # Retrieve more candidates
+        # =====================================================
+        # 🔹 Dense Retrieval
+        # =====================================================
         initial_matches = vector_store.search(query_embedding, top_k=8)
 
         if not initial_matches:
@@ -161,7 +144,33 @@ def chat(request: ChatRequest):
                 "sources": []
             }
 
-        # Rerank
+        # =====================================================
+        # 🔹 Hybrid Scoring (Dense + Keyword)
+        # =====================================================
+        for match in initial_matches:
+            keyword_score = keyword_overlap_score(
+                normalized_question,
+                match["text"]
+            )
+            match["keyword_score"] = keyword_score
+
+            # Convert FAISS distance to similarity
+            faiss_similarity = 1 / (1 + match["score"])
+
+            match["hybrid_score"] = (
+                0.7 * faiss_similarity +
+                0.3 * keyword_score
+            )
+
+        # Sort by hybrid score
+        initial_matches.sort(
+            key=lambda x: x["hybrid_score"],
+            reverse=True
+        )
+
+        # =====================================================
+        # 🔹 Cross-Encoder Reranking
+        # =====================================================
         reranked_matches = reranker.rerank(
             normalized_question,
             initial_matches
@@ -169,11 +178,14 @@ def chat(request: ChatRequest):
 
         matches = reranked_matches[:request.top_k]
 
-        # Similarity threshold
-        SIMILARITY_THRESHOLD = 0.8
+        # =====================================================
+        # 🔹 Confidence Threshold
+        # =====================================================
+        SIMILARITY_THRESHOLD = 1.2
         best_score = matches[0]["score"]
 
-        print("Best similarity score (FAISS):", best_score)
+        print("Best FAISS score:", best_score)
+        print("Best hybrid score:", matches[0]["hybrid_score"])
 
         if best_score > SIMILARITY_THRESHOLD:
             general_answer = llm_service.generate_answer(
@@ -191,7 +203,9 @@ def chat(request: ChatRequest):
                 "sources": []
             }
 
-        # Build context
+        # =====================================================
+        # 🔹 Build Context & Generate Answer
+        # =====================================================
         context = "\n\n".join(m["text"] for m in matches)
         context = context[:2000]
 
@@ -207,6 +221,8 @@ def chat(request: ChatRequest):
                 {
                     "source": m["source"],
                     "faiss_score": m["score"],
+                    "keyword_score": m["keyword_score"],
+                    "hybrid_score": m["hybrid_score"],
                     "rerank_score": m.get("rerank_score"),
                 }
                 for m in matches

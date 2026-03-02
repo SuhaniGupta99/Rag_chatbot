@@ -4,14 +4,15 @@ from pathlib import Path
 import numpy as np
 
 # 🔒 ABSOLUTE PROJECT ROOT
-BASE_DIR = Path(__file__).resolve().parents[2]  # backend/app/services → backend
+BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "app" / "data" / "faiss_index"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 INDEX_FILE = DATA_DIR / "index.faiss"
 META_FILE = DATA_DIR / "metadata.pkl"
 
-DEFAULT_DIM = 384
+# ✅ UPDATED DIMENSION FOR BGE BASE
+DEFAULT_DIM = 768
 
 
 class FaissVectorStore:
@@ -40,7 +41,6 @@ class FaissVectorStore:
         print("Index before add:", self.index.ntotal)
 
         embeddings = np.array(embeddings).astype("float32")
-        faiss.normalize_L2(embeddings)
 
         self.index.add(embeddings)
         self.metadata.extend(metadatas)
@@ -54,7 +54,6 @@ class FaissVectorStore:
             return []
 
         query = np.array([query_embedding]).astype("float32")
-        faiss.normalize_L2(query)
 
         distances, indices = self.index.search(query, top_k)
 
