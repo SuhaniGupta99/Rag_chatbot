@@ -1,15 +1,16 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import re
 import uuid
 import math
+import json
 
 from app.services.embeddings import EmbeddingService
 from app.services.vector_store import vector_store
 from app.services.llm import LLMService
 from app.services.reranker import RerankerService
 
-# ✅ NEW: Evaluation module
 from app.services.evaluation import (
     compute_context_relevance,
     compute_faithfulness,
@@ -189,22 +190,7 @@ def chat(request: ChatRequest):
         initial_matches = vector_store.search(query_embedding, top_k=8)
 
         if not initial_matches:
-            general_answer = llm_service.generate_answer(
-                question=request.question,
-                context=""
-            )
-
-            return {
-                "session_id": session_id,
-                "question": request.question,
-                "answer": general_answer,
-                "retrieval_confidence": 0.0,
-                "context_relevance": 0.0,
-                "faithfulness": 0.0,
-                "answer_relevance": 0.0,
-                "rag_quality_score": 0.0,
-                "sources": []
-            }
+            return {"message": "No relevant documents found."}
 
         for match in initial_matches:
             keyword_score = keyword_overlap_score(
@@ -256,59 +242,65 @@ Current Question:
 Answer clearly and concisely.
 """
 
-        answer = llm_service.generate_answer(
-            question=request.question,
-            context=full_prompt
-        )
+        # =========================================
+        # 🔥 STREAMING GENERATOR
+        # =========================================
+        def token_stream():
+            full_answer = ""
 
-        # ===============================
-        # 🔥 RAG Evaluation Metrics
-        # ===============================
-        answer_embedding = embedding_service.embed_query(answer)
-        context_embedding = embedding_service.embed_query(context)
-        question_embedding = embedding_service.embed_query(normalized_question)
+            for token in llm_service.stream_answer(
+                question=request.question,
+                context=full_prompt
+            ):
+                full_answer += token
+                yield token
 
-        context_relevance = compute_context_relevance(matches)
+            # ===============================
+            # 🔥 RAG Evaluation Metrics
+            # ===============================
+            answer_embedding = embedding_service.embed_query(full_answer)
+            context_embedding = embedding_service.embed_query(context)
+            question_embedding = embedding_service.embed_query(normalized_question)
 
-        faithfulness = compute_faithfulness(
-            answer_embedding,
-            context_embedding
-        )
+            context_relevance = compute_context_relevance(matches)
 
-        answer_relevance = compute_answer_relevance(
-            question_embedding,
-            answer_embedding
-        )
+            faithfulness = compute_faithfulness(
+                answer_embedding,
+                context_embedding
+            )
 
-        rag_quality_score = compute_rag_quality(
-            retrieval_confidence,
-            context_relevance,
-            faithfulness,
-            answer_relevance
-        )
+            answer_relevance = compute_answer_relevance(
+                question_embedding,
+                answer_embedding
+            )
 
-        history.append({
-            "user": request.question,
-            "assistant": answer
-        })
+            rag_quality_score = compute_rag_quality(
+                retrieval_confidence,
+                context_relevance,
+                faithfulness,
+                answer_relevance
+            )
 
-        history[:] = history[-MAX_HISTORY_TURNS:]
+            history.append({
+                "user": request.question,
+                "assistant": full_answer
+            })
 
-        if len(history) % SUMMARY_UPDATE_INTERVAL == 0:
-            update_summary(session_id, llm_service)
+            history[:] = history[-MAX_HISTORY_TURNS:]
 
-        return {
-            "session_id": session_id,
-            "question": request.question,
-            "answer": answer,
-            "summary": session["summary"],
-            "retrieval_confidence": retrieval_confidence,
-            "context_relevance": context_relevance,
-            "faithfulness": faithfulness,
-            "answer_relevance": answer_relevance,
-            "rag_quality_score": rag_quality_score,
-            "sources": matches
-        }
+            if len(history) % SUMMARY_UPDATE_INTERVAL == 0:
+                update_summary(session_id, llm_service)
+
+            yield "\n\n---METRICS---\n"
+            yield json.dumps({
+                "retrieval_confidence": retrieval_confidence,
+                "context_relevance": context_relevance,
+                "faithfulness": faithfulness,
+                "answer_relevance": answer_relevance,
+                "rag_quality_score": rag_quality_score
+            })
+
+        return StreamingResponse(token_stream(), media_type="text/plain")
 
     except Exception as e:
         print("🔥 CHAT ERROR:", repr(e))
