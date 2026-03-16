@@ -1,0 +1,443 @@
+import { useState, useRef, useEffect } from "react";
+import { C, fonts } from "../theme";
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const Badge = ({ children, color = C.cyan }) => (
+  <span style={{
+    padding:"3px 10px", borderRadius:99,
+    border:`1px solid ${color}50`, background:`${color}12`,
+    color, fontSize:11, fontFamily:fonts.mono,
+    display:"inline-flex", alignItems:"center", gap:4,
+  }}>{children}</span>
+);
+
+const scoreColor = v => v >= 0.88 ? C.green : v >= 0.72 ? C.cyan : C.amber;
+
+const fileIcon = name => {
+  const ext = name.split(".").pop().toLowerCase();
+  if (ext === "pdf")  return { icon:"📕", color:C.rose   };
+  if (ext === "md")   return { icon:"📝", color:C.cyan   };
+  if (ext === "txt")  return { icon:"📄", color:C.textSub};
+  if (ext === "docx") return { icon:"📘", color:C.violet };
+  return { icon:"📄", color:C.textSub };
+};
+
+// ─── CONFIDENCE CARD ─────────────────────────────────────────────────────────
+function ConfidenceCard({ scores }) {
+  const metrics = [
+    { key:"faithfulness",     label:"Faithfulness",       tip:"How grounded the answer is in source docs"  },
+    { key:"answer_relevance", label:"Answer Relevance",    tip:"How relevant the answer is to the question" },
+    { key:"context_recall",   label:"Context Recall",      tip:"How much needed context was retrieved"      },
+    { key:"rag_quality",      label:"Overall RAG Quality", tip:"Combined quality score"                     },
+  ];
+
+  return (
+    <div style={{
+      marginTop:8,
+      background:C.raised, border:`1px solid ${C.border}`,
+      borderRadius:12, padding:"16px 18px",
+      display:"flex", flexDirection:"column", gap:14,
+      animation:"fadeIn .25s cubic-bezier(.22,1,.36,1) both",
+    }}>
+      <p style={{ fontSize:10, fontFamily:fonts.mono, color:C.textFaint, letterSpacing:1 }}>
+        CONFIDENCE SCORES
+      </p>
+      {metrics.map(m => {
+        const val = scores[m.key] ?? 0;
+        const pct = Math.round(val * 100);
+        const col = scoreColor(val);
+        return (
+          <div key={m.key}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+              <div>
+                <p style={{ fontSize:13, color:C.text, fontWeight:500 }}>{m.label}</p>
+                <p style={{ fontSize:11, color:C.textFaint, marginTop:1 }}>{m.tip}</p>
+              </div>
+              <span style={{
+                fontFamily:fonts.mono, fontSize:16, fontWeight:700,
+                color:col, flexShrink:0, marginLeft:12,
+              }}>{pct}%</span>
+            </div>
+            <div style={{ height:5, background:C.border, borderRadius:99 }}>
+              <div style={{
+                height:"100%", borderRadius:99, background:col,
+                width:`${pct}%`,
+                transition:"width .8s cubic-bezier(.22,1,.36,1)",
+              }}/>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── MESSAGE BUBBLE ───────────────────────────────────────────────────────────
+function MessageBubble({ msg, idx }) {
+  const [showScores, setShowScores] = useState(false);
+  const isUser = msg.role === "user";
+
+  return (
+    <div style={{
+      display:"flex",
+      flexDirection: isUser ? "row-reverse" : "row",
+      gap:10, alignItems:"flex-start",
+      animation:"fadeUp .3s cubic-bezier(.22,1,.36,1) both",
+      animationDelay:`${idx * .04}s`,
+    }}>
+      {/* Avatar */}
+      <div style={{
+        width:32, height:32, borderRadius:10, flexShrink:0,
+        background: isUser
+          ? `linear-gradient(135deg,${C.violet},${C.rose})`
+          : `linear-gradient(135deg,${C.cyan},#0066FF)`,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontSize:12, fontWeight:700,
+        color: isUser ? "#fff" : "#000",
+        fontFamily:fonts.display,
+      }}>{isUser ? "U" : "AI"}</div>
+
+      <div style={{ maxWidth:"72%" }}>
+        {/* Bubble */}
+        <div style={{
+          background: isUser ? `${C.violet}15` : C.surface,
+          border:`1px solid ${isUser ? C.violet+"40" : C.border}`,
+          borderRadius: isUser ? "14px 3px 14px 14px" : "3px 14px 14px 14px",
+          padding:"12px 16px",
+        }}>
+          {msg.typing ? (
+            <div style={{ display:"flex", gap:5, alignItems:"center", height:20 }}>
+              {[0,1,2].map(j => (
+                <div key={j} style={{
+                  width:7, height:7, borderRadius:"50%", background:C.cyan,
+                  animation:`dot 1.4s ${j*.2}s ease-in-out infinite`,
+                }}/>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-line" }}>
+              {msg.content}
+            </p>
+          )}
+
+          {/* Sources */}
+          {msg.sources?.length > 0 && (
+            <div style={{ marginTop:10, display:"flex", gap:6, flexWrap:"wrap" }}>
+              {msg.sources.map((s,j) => <Badge key={j} color={C.cyan}>📄 {s}</Badge>)}
+            </div>
+          )}
+        </div>
+
+        {/* Confidence button */}
+        {!isUser && msg.scores && !msg.typing && (
+          <div style={{ marginTop:7, paddingLeft:2 }}>
+            <button
+              onClick={() => setShowScores(p => !p)}
+              style={{
+                display:"flex", alignItems:"center", gap:7,
+                padding:"5px 12px", borderRadius:8,
+                background:"transparent", border:`1px solid ${C.border}`,
+                color:C.textSub, fontSize:12, cursor:"pointer",
+                transition:"all .18s", fontFamily:fonts.body,
+              }}>
+              <span>📊</span>
+              <span>{showScores ? "Hide" : "View"} confidence scores</span>
+              <span style={{ color:C.textFaint, fontSize:10 }}>{showScores ? "▲" : "▼"}</span>
+            </button>
+            {showScores && <ConfidenceCard scores={msg.scores} />}
+          </div>
+        )}
+
+        {/* Time */}
+        <div style={{
+          marginTop:4, fontSize:10, color:C.textFaint,
+          fontFamily:fonts.mono,
+          textAlign: isUser ? "right" : "left",
+        }}>{msg.time}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── UPLOAD ZONE ─────────────────────────────────────────────────────────────
+function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
+  const [dragging, setDragging] = useState(false);
+
+  const addFile = name => {
+    if (files.find(f => f.name === name)) return;
+    setFiles(p => [...p, { name, status:"indexing", progress:0 }]);
+    let prog = 0;
+    const iv = setInterval(() => {
+      prog += 25;
+      setFiles(p => p.map(f =>
+        f.name === name
+          ? { ...f, progress:Math.min(prog,100), status:prog>=100 ? "ready" : "indexing" }
+          : f
+      ));
+      if (prog >= 100) clearInterval(iv);
+    }, 350);
+  };
+
+  return (
+    <div style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, flexShrink:0 }}>
+
+      {/* Header — click to collapse */}
+      <div
+        onClick={() => setCollapsed(p => !p)}
+        style={{
+          padding:"14px 24px", display:"flex",
+          alignItems:"center", justifyContent:"space-between",
+          cursor:"pointer",
+        }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <span style={{ fontSize:18 }}>📂</span>
+          <div>
+            <p style={{ fontSize:14, fontWeight:700, color:C.text, fontFamily:fonts.display }}>
+              Documents
+            </p>
+            <p style={{ fontSize:11, color:C.textFaint, fontFamily:fonts.mono }}>
+              {files.length === 0
+                ? "No documents — upload to start chatting"
+                : `${files.filter(f=>f.status==="ready").length} of ${files.length} ready`}
+            </p>
+          </div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          {files.length > 0 && (
+            <Badge color={C.green}>
+              {files.filter(f=>f.status==="ready").length} indexed
+            </Badge>
+          )}
+          <span style={{ color:C.textFaint, fontSize:12, fontFamily:fonts.mono }}>
+            {collapsed ? "▼ Show" : "▲ Hide"}
+          </span>
+        </div>
+      </div>
+
+      {/* Expandable body */}
+      {!collapsed && (
+        <div style={{ padding:"0 24px 20px" }}>
+          {/* Drop zone */}
+          <div
+            onDragOver={e => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={e => {
+              e.preventDefault(); setDragging(false);
+              Array.from(e.dataTransfer.files).forEach(f => addFile(f.name));
+            }}
+            onClick={() => addFile(`document_${files.length+1}.pdf`)}
+            style={{
+              border:`2px dashed ${dragging ? C.cyan : C.border}`,
+              borderRadius:14, padding:"28px 20px",
+              textAlign:"center", cursor:"pointer",
+              transition:"all .2s",
+              background: dragging ? `${C.cyan}08` : C.bg,
+              marginBottom: files.length > 0 ? 16 : 0,
+            }}>
+            <div style={{ fontSize:36, marginBottom:10 }}>
+              {dragging ? "⬇️" : "📂"}
+            </div>
+            <p style={{ fontSize:15, fontWeight:600, color: dragging ? C.cyan : C.textSub, marginBottom:6 }}>
+              {dragging ? "Drop to upload!" : "Drag & drop files here"}
+            </p>
+            <p style={{ fontSize:12, color:C.textFaint, fontFamily:fonts.mono, marginBottom:14 }}>
+              PDF · MD · TXT · DOCX · CSV
+            </p>
+            <button
+              onClick={e => { e.stopPropagation(); addFile(`file_${files.length+1}.pdf`); }}
+              style={{
+                padding:"9px 24px", borderRadius:10,
+                background:`linear-gradient(135deg,${C.cyan},#0066FF)`,
+                border:"none", color:"#000",
+                fontSize:13, fontWeight:700, fontFamily:fonts.display,
+                cursor:"pointer",
+              }}>Browse Files</button>
+          </div>
+
+          {/* File cards */}
+          {files.length > 0 && (
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              <p style={{ fontSize:10, fontFamily:fonts.mono, color:C.textFaint, letterSpacing:1, marginBottom:2 }}>
+                UPLOADED FILES
+              </p>
+              {files.map(f => {
+                const { icon, color } = fileIcon(f.name);
+                return (
+                  <div key={f.name} style={{
+                    display:"flex", alignItems:"center", gap:14,
+                    padding:"13px 16px",
+                    background:C.raised,
+                    border:`1px solid ${f.status==="ready" ? C.green+"30" : C.border}`,
+                    borderRadius:12, transition:"border-color .3s",
+                  }}>
+                    <div style={{
+                      width:40, height:40, borderRadius:10, flexShrink:0,
+                      background:`${color}15`, border:`1px solid ${color}30`,
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:20,
+                    }}>{icon}</div>
+
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <p style={{ fontSize:13, fontWeight:600, color:C.text, marginBottom:6 }}>{f.name}</p>
+                      <div style={{ height:4, background:C.border, borderRadius:99 }}>
+                        <div style={{
+                          height:"100%", borderRadius:99,
+                          width:`${f.progress}%`,
+                          background: f.status==="ready" ? C.green : C.cyan,
+                          transition:"width .3s ease, background .3s",
+                        }}/>
+                      </div>
+                    </div>
+
+                    <div style={{ flexShrink:0 }}>
+                      {f.status === "ready"
+                        ? <Badge color={C.green}>✓ Ready</Badge>
+                        : <Badge color={C.amber}>⟳ Indexing…</Badge>}
+                    </div>
+
+                    <button
+                      onClick={() => setFiles(p => p.filter(x => x.name !== f.name))}
+                      style={{
+                        background:"none", border:"none", color:C.textFaint,
+                        fontSize:18, lineHeight:1, cursor:"pointer",
+                        flexShrink:0, transition:"color .15s",
+                      }}>×</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── HOME PAGE ────────────────────────────────────────────────────────────────
+export default function HomePage() {
+  const [files, setFiles] = useState([
+    { name:"research_paper.pdf", status:"ready",    progress:100 },
+    { name:"annual_report.pdf",  status:"ready",    progress:100 },
+    { name:"meeting_notes.txt",  status:"indexing", progress:60  },
+  ]);
+  const [collapsed, setCollapsed] = useState(false);
+  const [val, setVal]   = useState("");
+  const [msgs, setMsgs] = useState([
+    {
+      role:"assistant",
+      content:"Hi! I've indexed your documents. Ask me anything about them.",
+      time:"just now", sources:[],
+    },
+    { role:"user", content:"What are the key findings from the research paper?", time:"1m ago" },
+    {
+      role:"assistant",
+      content:"The paper identifies three core findings:\n\n1. Transformer-based retrieval outperforms BM25 by 41% on semantic queries.\n2. Hybrid reranking reduces hallucination by 34%.\n3. Chunk size of 512 tokens yields the best precision-recall tradeoff.",
+      time:"1m ago",
+      sources:["research_paper.pdf","notes.md"],
+      scores:{ faithfulness:0.94, answer_relevance:0.91, context_recall:0.88, rag_quality:0.91 },
+    },
+  ]);
+  const bottomRef = useRef();
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior:"smooth" });
+  }, [msgs]);
+
+  const send = () => {
+    if (!val.trim()) return;
+    const q = val; setVal("");
+    setMsgs(p => [...p,
+      { role:"user", content:q, time:"now", sources:[] },
+      { role:"assistant", typing:true, time:"now", sources:[] },
+    ]);
+
+    // ← replace this with real fetch() to your backend later
+    setTimeout(() => {
+      setMsgs(p => [...p.filter(m => !m.typing), {
+        role:"assistant",
+        content:"Based on the retrieved context from your documents, here is what I found.",
+        time:"now",
+        sources:["research_paper.pdf"],
+        scores:{ faithfulness:0.87, answer_relevance:0.90, context_recall:0.83, rag_quality:0.87 },
+      }]);
+    }, 1800);
+  };
+
+  return (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
+      {/* Top bar */}
+      <div style={{
+        padding:"13px 24px",
+        background:C.surface, borderBottom:`1px solid ${C.border}`,
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+        flexShrink:0,
+      }}>
+        <div>
+          <span style={{ fontFamily:fonts.display, fontWeight:700, fontSize:16, color:C.text }}>
+            RAG Chatbot
+          </span>
+          <p style={{ fontSize:11, color:C.textFaint, fontFamily:fonts.mono, marginTop:2 }}>
+            {files.filter(f=>f.status==="ready").length} docs ready · ask anything
+          </p>
+        </div>
+        <Badge color={C.green}>● online</Badge>
+      </div>
+
+      {/* Upload zone */}
+      <UploadZone
+        files={files} setFiles={setFiles}
+        collapsed={collapsed} setCollapsed={setCollapsed}
+      />
+
+      {/* Messages */}
+      <div style={{ flex:1, overflowY:"auto", padding:"24px 28px", display:"flex", flexDirection:"column", gap:18 }}>
+        {msgs.map((msg, i) => <MessageBubble key={i} msg={msg} idx={i} />)}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input bar */}
+      <div style={{
+        padding:"12px 24px 18px",
+        background:C.surface, borderTop:`1px solid ${C.border}`, flexShrink:0,
+      }}>
+        <div style={{
+          background:C.bg, border:`1px solid ${C.border}`,
+          borderRadius:14, padding:"11px 14px",
+          display:"flex", alignItems:"flex-end", gap:10,
+        }}>
+          <textarea
+            value={val}
+            onChange={e => setVal(e.target.value)}
+            onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            placeholder="Ask anything about your documents…"
+            rows={1}
+            style={{
+              flex:1, background:"none", border:"none", outline:"none",
+              color:C.text, fontSize:14, lineHeight:1.6,
+              resize:"none", maxHeight:120, overflowY:"auto",
+              fontFamily:fonts.body,
+            }}
+          />
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{
+              fontSize:11, color:C.textSub, fontFamily:fonts.mono,
+              background:C.border, padding:"3px 8px", borderRadius:6,
+            }}>GPT-4o</span>
+            <button onClick={send} style={{
+              width:36, height:36, borderRadius:10, border:"none",
+              background: val.trim() ? `linear-gradient(135deg,${C.cyan},#0066FF)` : C.border,
+              color: val.trim() ? "#000" : C.textSub,
+              fontSize:18, fontWeight:700,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              transition:"all .18s", cursor:"pointer",
+              boxShadow: val.trim() ? `0 0 14px ${C.cyan}30` : "none",
+            }}>↑</button>
+          </div>
+        </div>
+        <p style={{ textAlign:"center", marginTop:7, fontSize:11, color:C.textFaint, fontFamily:fonts.mono }}>
+          ↵ Send · ⇧↵ New line
+        </p>
+      </div>
+    </div>
+  );
+}
