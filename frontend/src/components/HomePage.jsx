@@ -85,7 +85,6 @@ function MessageBubble({ msg, idx }) {
       animation:"fadeUp .3s cubic-bezier(.22,1,.36,1) both",
       animationDelay:`${idx * .04}s`,
     }}>
-      {/* Avatar */}
       <div style={{
         width:32, height:32, borderRadius:10, flexShrink:0,
         background: isUser
@@ -98,7 +97,6 @@ function MessageBubble({ msg, idx }) {
       }}>{isUser ? "U" : "AI"}</div>
 
       <div style={{ maxWidth:"72%" }}>
-        {/* Bubble */}
         <div style={{
           background: isUser ? `${C.violet}15` : C.surface,
           border:`1px solid ${isUser ? C.violet+"40" : C.border}`,
@@ -119,8 +117,6 @@ function MessageBubble({ msg, idx }) {
               {msg.content}
             </p>
           )}
-
-          {/* Sources */}
           {msg.sources?.length > 0 && (
             <div style={{ marginTop:10, display:"flex", gap:6, flexWrap:"wrap" }}>
               {msg.sources.map((s,j) => <Badge key={j} color={C.cyan}>📄 {s}</Badge>)}
@@ -128,18 +124,15 @@ function MessageBubble({ msg, idx }) {
           )}
         </div>
 
-        {/* Confidence button */}
         {!isUser && msg.scores && !msg.typing && (
           <div style={{ marginTop:7, paddingLeft:2 }}>
-            <button
-              onClick={() => setShowScores(p => !p)}
-              style={{
-                display:"flex", alignItems:"center", gap:7,
-                padding:"5px 12px", borderRadius:8,
-                background:"transparent", border:`1px solid ${C.border}`,
-                color:C.textSub, fontSize:12, cursor:"pointer",
-                transition:"all .18s", fontFamily:fonts.body,
-              }}>
+            <button onClick={() => setShowScores(p => !p)} style={{
+              display:"flex", alignItems:"center", gap:7,
+              padding:"5px 12px", borderRadius:8,
+              background:"transparent", border:`1px solid ${C.border}`,
+              color:C.textSub, fontSize:12, cursor:"pointer",
+              transition:"all .18s", fontFamily:fonts.body,
+            }}>
               <span>📊</span>
               <span>{showScores ? "Hide" : "View"} confidence scores</span>
               <span style={{ color:C.textFaint, fontSize:10 }}>{showScores ? "▲" : "▼"}</span>
@@ -148,7 +141,6 @@ function MessageBubble({ msg, idx }) {
           </div>
         )}
 
-        {/* Time */}
         <div style={{
           marginTop:4, fontSize:10, color:C.textFaint,
           fontFamily:fonts.mono,
@@ -162,33 +154,45 @@ function MessageBubble({ msg, idx }) {
 // ─── UPLOAD ZONE ─────────────────────────────────────────────────────────────
 function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
   const [dragging, setDragging] = useState(false);
+  const inputRef = useRef();
 
-  const addFile = name => {
+  const addFile = async (file) => {
+    const name = file.name ?? file;
     if (files.find(f => f.name === name)) return;
-    setFiles(p => [...p, { name, status:"indexing", progress:0 }]);
-    let prog = 0;
-    const iv = setInterval(() => {
-      prog += 25;
+    setFiles(p => [...p, { name, status:"indexing", progress:50 }]);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("http://localhost:8000/upload/", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      console.log("Upload response:", data);
+
       setFiles(p => p.map(f =>
-        f.name === name
-          ? { ...f, progress:Math.min(prog,100), status:prog>=100 ? "ready" : "indexing" }
-          : f
+        f.name === name ? { ...f, status:"ready", progress:100 } : f
       ));
-      if (prog >= 100) clearInterval(iv);
-    }, 350);
+    } catch (err) {
+      console.error("Upload failed:", err);
+      setFiles(p => p.map(f =>
+        f.name === name ? { ...f, status:"error", progress:0 } : f
+      ));
+    }
   };
 
   return (
     <div style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, flexShrink:0 }}>
 
-      {/* Header — click to collapse */}
-      <div
-        onClick={() => setCollapsed(p => !p)}
-        style={{
-          padding:"14px 24px", display:"flex",
-          alignItems:"center", justifyContent:"space-between",
-          cursor:"pointer",
-        }}>
+      {/* Header */}
+      <div onClick={() => setCollapsed(p => !p)} style={{
+        padding:"14px 24px", display:"flex",
+        alignItems:"center", justifyContent:"space-between",
+        cursor:"pointer",
+      }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <span style={{ fontSize:18 }}>📂</span>
           <div>
@@ -217,15 +221,27 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
       {/* Expandable body */}
       {!collapsed && (
         <div style={{ padding:"0 24px 20px" }}>
+          {/* Hidden real file input */}
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".pdf,.md,.txt,.docx,.csv"
+            style={{ display:"none" }}
+            onChange={e => {
+              Array.from(e.target.files).forEach(f => addFile(f));
+              e.target.value = "";
+            }}
+          />
+
           {/* Drop zone */}
           <div
             onDragOver={e => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={e => {
               e.preventDefault(); setDragging(false);
-              Array.from(e.dataTransfer.files).forEach(f => addFile(f.name));
+              Array.from(e.dataTransfer.files).forEach(f => addFile(f));
             }}
-            onClick={() => addFile(`document_${files.length+1}.pdf`)}
+            onClick={() => inputRef.current.click()}
             style={{
               border:`2px dashed ${dragging ? C.cyan : C.border}`,
               borderRadius:14, padding:"28px 20px",
@@ -244,7 +260,7 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
               PDF · MD · TXT · DOCX · CSV
             </p>
             <button
-              onClick={e => { e.stopPropagation(); addFile(`file_${files.length+1}.pdf`); }}
+              onClick={e => { e.stopPropagation(); inputRef.current.click(); }}
               style={{
                 padding:"9px 24px", borderRadius:10,
                 background:`linear-gradient(135deg,${C.cyan},#0066FF)`,
@@ -292,6 +308,8 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
                     <div style={{ flexShrink:0 }}>
                       {f.status === "ready"
                         ? <Badge color={C.green}>✓ Ready</Badge>
+                        : f.status === "error"
+                        ? <Badge color={C.rose}>✗ Failed</Badge>
                         : <Badge color={C.amber}>⟳ Indexing…</Badge>}
                     </div>
 
@@ -315,26 +333,14 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
 export default function HomePage() {
-  const [files, setFiles] = useState([
-    { name:"research_paper.pdf", status:"ready",    progress:100 },
-    { name:"annual_report.pdf",  status:"ready",    progress:100 },
-    { name:"meeting_notes.txt",  status:"indexing", progress:60  },
-  ]);
+  const [files, setFiles]       = useState([]);
   const [collapsed, setCollapsed] = useState(false);
-  const [val, setVal]   = useState("");
-  const [msgs, setMsgs] = useState([
+  const [val, setVal]           = useState("");
+  const [msgs, setMsgs]         = useState([
     {
       role:"assistant",
-      content:"Hi! I've indexed your documents. Ask me anything about them.",
+      content:"Hi! Upload a document above and ask me anything about it.",
       time:"just now", sources:[],
-    },
-    { role:"user", content:"What are the key findings from the research paper?", time:"1m ago" },
-    {
-      role:"assistant",
-      content:"The paper identifies three core findings:\n\n1. Transformer-based retrieval outperforms BM25 by 41% on semantic queries.\n2. Hybrid reranking reduces hallucination by 34%.\n3. Chunk size of 512 tokens yields the best precision-recall tradeoff.",
-      time:"1m ago",
-      sources:["research_paper.pdf","notes.md"],
-      scores:{ faithfulness:0.94, answer_relevance:0.91, context_recall:0.88, rag_quality:0.91 },
     },
   ]);
   const bottomRef = useRef();
@@ -343,7 +349,7 @@ export default function HomePage() {
     bottomRef.current?.scrollIntoView({ behavior:"smooth" });
   }, [msgs]);
 
-  const send = () => {
+  const send = async () => {
     if (!val.trim()) return;
     const q = val; setVal("");
     setMsgs(p => [...p,
@@ -351,16 +357,42 @@ export default function HomePage() {
       { role:"assistant", typing:true, time:"now", sources:[] },
     ]);
 
-    // ← replace this with real fetch() to your backend later
-    setTimeout(() => {
+    try {
+      const res = await fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: q,
+          top_k: 3,
+          session_id: "session_1",
+        }),
+      });
+
+      const data = await res.json();
+      console.log("Backend response:", data);
+
       setMsgs(p => [...p.filter(m => !m.typing), {
-        role:"assistant",
-        content:"Based on the retrieved context from your documents, here is what I found.",
-        time:"now",
-        sources:["research_paper.pdf"],
-        scores:{ faithfulness:0.87, answer_relevance:0.90, context_recall:0.83, rag_quality:0.87 },
+        role: "assistant",
+        content: data.answer ?? data.response ?? JSON.stringify(data),
+        time: "now",
+        sources: data.sources ?? [],
+        scores: {
+          faithfulness:     data.faithfulness     ?? 0,
+          answer_relevance: data.answer_relevance ?? 0,
+          context_recall:   data.context_recall   ?? 0,
+          rag_quality:      data.rag_quality       ?? 0,
+        },
       }]);
-    }, 1800);
+
+    } catch (err) {
+      console.error("Error:", err);
+      setMsgs(p => [...p.filter(m => !m.typing), {
+        role: "assistant",
+        content: "⚠️ Could not connect to backend. Make sure it is running on port 8000.",
+        time: "now",
+        sources: [],
+      }]);
+    }
   };
 
   return (
