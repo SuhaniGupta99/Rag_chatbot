@@ -3,7 +3,6 @@ import { C, fonts } from "./theme";
 import Sidebar from "./components/Sidebar";
 import HomePage from "./components/HomePage";
 import SourcesPanel from "./components/SourcesPanel";
-import SettingsPanel from "./components/SettingsPanel";
 
 export default function App() {
   const [activeSession, setActiveSession] = useState(
@@ -60,7 +59,7 @@ export default function App() {
   />
 )}
 
-        {(view === "sources" || view === "settings") && (
+        {(view === "sources") && (
           <div style={{
             flex:1,
             display:"flex",
@@ -79,20 +78,17 @@ export default function App() {
                 fontFamily:fonts.display,
                 fontWeight:700, fontSize:16, color:C.text,
               }}>
-                {view === "sources" ? "📄 Retrieved Sources" : "⚙️ Settings"}
+                "📄 Retrieved Sources"
               </span>
               <p style={{
                 fontSize:11, color:C.textFaint,
                 fontFamily:fonts.mono, marginTop:2,
               }}>
-                {view === "sources"
-                  ? "Most recent retrieval — ranked by relevance score"
-                  : "Configure your RAG chatbot experience"}
+                "Most recent retrieval — ranked by relevance score"
               </p>
             </div>
 
             {view === "sources"  && <SourcesPanel />}
-            {view === "settings" && <SettingsPanel />}
           </div>
         )}
       </div>

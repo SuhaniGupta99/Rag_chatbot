@@ -576,10 +576,6 @@ localStorage.setItem("sessions", JSON.stringify(sessions));
             }}
           />
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{
-              fontSize:11, color:C.textSub, fontFamily:fonts.mono,
-              background:C.border, padding:"3px 8px", borderRadius:6,
-            }}>GPT-4o</span>
             <button onClick={send} style={{
               width:36, height:36, borderRadius:10, border:"none",
               background: val.trim() ? `linear-gradient(135deg,${C.cyan},#0066FF)` : C.border,
