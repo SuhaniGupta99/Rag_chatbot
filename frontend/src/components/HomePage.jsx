@@ -332,7 +332,8 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
 }
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
-export default function HomePage() {
+export default function HomePage({ activeSession, setActiveSession }) {
+  
   const [files, setFiles]       = useState([]);
   const [collapsed, setCollapsed] = useState(false);
   const [val, setVal]           = useState("");
@@ -348,53 +349,177 @@ export default function HomePage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior:"smooth" });
   }, [msgs]);
+  useEffect(() => {
+  const sessions = JSON.parse(localStorage.getItem("sessions") || "[]");
+  const current = sessions.find(s => s.id === activeSession);
+
+  if (current) {
+    setMsgs(current.messages || []);
+  } else {
+    setMsgs([
+  {
+    role: "assistant",
+    content: "Hi! Upload a document above and ask me anything about it.",
+    time: "just now",
+    sources: [],
+  }
+]);
+  }
+}, [activeSession]);
 
   const send = async () => {
-    if (!val.trim()) return;
-    const q = val; setVal("");
-    setMsgs(p => [...p,
-      { role:"user", content:q, time:"now", sources:[] },
-      { role:"assistant", typing:true, time:"now", sources:[] },
+  if (!val.trim()) return;
+  if (!activeSession) {
+  const newId = crypto.randomUUID();
+  setActiveSession(newId);
+  localStorage.setItem("activeSession", newId);
+
+  const sessions = JSON.parse(localStorage.getItem("sessions") || "[]");
+
+  sessions.unshift({
+    id: newId,
+    title: "New Chat",
+    time: "now",
+    messages: []
+  });
+
+  localStorage.setItem("sessions", JSON.stringify(sessions));
+}
+  const q = val;
+  setVal("");
+
+  setMsgs(p => [...p,
+    { role:"user", content:q, time:"now", sources:[] },
+    { role:"assistant", typing:true, time:"now", sources:[] },
+  ]);
+
+  try {
+    const res = await fetch("http://localhost:8000/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: q,
+        top_k: 3,
+        session_id: activeSession,
+      }),
+    });
+
+    // 🔥 SAFETY CHECK (IMPORTANT)
+    if (!res.body) {
+      throw new Error("No response body (stream not supported or backend error)");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    let done = false;
+    let fullText = "";
+    let metricsText = "";
+    let isMetrics = false;
+
+    // Replace typing bubble
+    setMsgs(p => [
+      ...p.filter(m => !m.typing),
+      { role: "assistant", content: "", time: "now", sources: [] },
     ]);
 
-    try {
-      const res = await fetch("http://localhost:8000/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: q,
-          top_k: 3,
-          session_id: "session_1",
-        }),
-      });
+    while (!done) {
+      const { value, done: doneReading } = await reader.read();
+      done = doneReading;
 
-      const data = await res.json();
-      console.log("Backend response:", data);
+      if (!value) continue;
 
-      setMsgs(p => [...p.filter(m => !m.typing), {
-        role: "assistant",
-        content: data.answer ?? data.response ?? JSON.stringify(data),
-        time: "now",
-        sources: data.sources ?? [],
-        scores: {
-          faithfulness:     data.faithfulness     ?? 0,
-          answer_relevance: data.answer_relevance ?? 0,
-          context_recall:   data.context_recall   ?? 0,
-          rag_quality:      data.rag_quality       ?? 0,
-        },
-      }]);
+      const chunk = decoder.decode(value);
 
-    } catch (err) {
-      console.error("Error:", err);
-      setMsgs(p => [...p.filter(m => !m.typing), {
-        role: "assistant",
-        content: "⚠️ Could not connect to backend. Make sure it is running on port 8000.",
-        time: "now",
-        sources: [],
-      }]);
+      if (chunk.includes("---METRICS---")) {
+        isMetrics = true;
+        continue;
+      }
+
+      if (!isMetrics) {
+        fullText += chunk;
+
+        setMsgs(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last) last.content = fullText;
+          return updated;
+        });
+
+      } else {
+        metricsText += chunk;
+      }
     }
-  };
 
+    // Parse metrics safely
+    if (metricsText) {
+      try {
+        const metrics = JSON.parse(metricsText);
+
+        setMsgs(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+
+          if (last) {
+            last.scores = {
+              faithfulness: metrics.faithfulness ?? 0,
+              answer_relevance: metrics.answer_relevance ?? 0,
+              context_recall: metrics.context_relevance ?? 0,
+              rag_quality: metrics.rag_quality_score ?? 0,
+            };
+          }
+
+          return updated;
+        });
+        
+      } catch (err) {
+        console.error("Metrics parse error:", err);
+      }
+    }
+const sessions = JSON.parse(localStorage.getItem("sessions") || "[]");
+
+// find session index
+const index = sessions.findIndex(s => s.id === activeSession);
+
+if (index !== -1) {
+  // ✅ update existing session
+  sessions[index].messages = [
+    ...(sessions[index].messages || []),
+
+    { role: "user", content: q, time: "now" },
+    { role: "assistant", content: fullText, time: "now" }
+  ];
+
+  // update title if first message
+  if (sessions[index].title === "New Chat") {
+    sessions[index].title = q.slice(0, 30);
+  }
+
+} else {
+  // ✅ fallback (should rarely happen)
+  sessions.push({
+    id: activeSession,
+    title: q.slice(0, 30),
+    time: "now",
+    messages: [
+      { role: "user", content: q },
+      { role: "assistant", content: fullText }
+    ]
+  });
+}
+
+localStorage.setItem("sessions", JSON.stringify(sessions));
+  } catch (err) {
+    console.error("STREAM ERROR:", err);
+
+    setMsgs(p => [...p.filter(m => !m.typing), {
+      role: "assistant",
+      content: "⚠️ Backend error or not running.",
+      time: "now",
+      sources: [],
+    }]);
+  }
+};
   return (
     <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
       {/* Top bar */}

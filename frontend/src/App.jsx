@@ -6,8 +6,11 @@ import SourcesPanel from "./components/SourcesPanel";
 import SettingsPanel from "./components/SettingsPanel";
 
 export default function App() {
+  const [activeSession, setActiveSession] = useState(
+  localStorage.getItem("activeSession") || null
+);
   const [view, setView] = useState("chat");
-  const [activeSession, setActiveSession] = useState(1);
+  
 
   return (
     <>
@@ -50,7 +53,12 @@ export default function App() {
         />
 
         {/* Main content area */}
-        {view === "chat" && <HomePage />}
+        {view === "chat" && (
+  <HomePage
+    activeSession={activeSession}
+    setActiveSession={setActiveSession}
+  />
+)}
 
         {(view === "sources" || view === "settings") && (
           <div style={{
