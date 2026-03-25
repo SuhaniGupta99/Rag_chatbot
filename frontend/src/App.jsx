@@ -3,6 +3,7 @@ import { C, fonts } from "./theme";
 import Sidebar from "./components/Sidebar";
 import HomePage from "./components/HomePage";
 import SourcesPanel from "./components/SourcesPanel";
+import SettingsPanel from "./components/SettingsPanel";
 
 export default function App() {
   const [activeSession, setActiveSession] = useState(
@@ -59,7 +60,7 @@ export default function App() {
   />
 )}
 
-        {(view === "sources") && (
+        {(view === "sources" || view === "settings")&& (
           <div style={{
             flex:1,
             display:"flex",
@@ -75,20 +76,30 @@ export default function App() {
               flexShrink:0,
             }}>
               <span style={{
-                fontFamily:fonts.display,
-                fontWeight:700, fontSize:16, color:C.text,
-              }}>
-                "📄 Retrieved Sources"
-              </span>
-              <p style={{
-                fontSize:11, color:C.textFaint,
-                fontFamily:fonts.mono, marginTop:2,
-              }}>
-                "Most recent retrieval — ranked by relevance score"
-              </p>
+  fontFamily:fonts.display,
+  fontWeight:700,
+  fontSize:16,
+  color:C.text,
+}}>
+  {view === "sources"
+    ? "📄 Retrieved Sources"
+    : "⚙️ Settings"}
+</span>
+
+<p style={{
+  fontSize:11,
+  color:C.textFaint,
+  fontFamily:fonts.mono,
+  marginTop:2,
+}}>
+  {view === "sources"
+    ? "Most recent retrieval — ranked by relevance score"
+    : "Select which AI model to use"}
+</p>
             </div>
 
             {view === "sources"  && <SourcesPanel />}
+            {view === "settings" && <SettingsPanel />}
           </div>
         )}
       </div>

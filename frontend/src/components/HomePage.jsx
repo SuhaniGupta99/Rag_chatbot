@@ -337,6 +337,7 @@ export default function HomePage({ activeSession, setActiveSession }) {
   const [files, setFiles]       = useState([]);
   const [collapsed, setCollapsed] = useState(false);
   const [val, setVal]           = useState("");
+  const selectedModel = localStorage.getItem("selectedModel") || "phi3:mini";
   const [msgs, setMsgs]         = useState([
     {
       role:"assistant",
@@ -398,10 +399,11 @@ export default function HomePage({ activeSession, setActiveSession }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        question: q,
-        top_k: 3,
-        session_id: activeSession,
-      }),
+  question: q,
+  top_k: 3,
+  session_id: activeSession,
+  model: selectedModel
+}),
     });
 
     // 🔥 SAFETY CHECK (IMPORTANT)
@@ -575,6 +577,22 @@ localStorage.setItem("sessions", JSON.stringify(sessions));
               fontFamily:fonts.body,
             }}
           />
+          <span style={{
+            fontSize:13,
+            color:C.textSub,
+            fontFamily:fonts.mono,
+            background:C.border,
+            padding:"3px 8px",
+            borderRadius:6,
+            }}>
+              {(() => {
+                 const m = localStorage.getItem("selectedModel") || "phi3:mini";
+                  if (m.includes("phi3:mini")) return "phi3";
+                  if (m.includes("tinyllama:latest")) return "TinyLLaMA";
+                  if (m.includes("llama3:8b-instruct-q4_0")) return "LLaMA 3";
+                  return m;
+                  })()}
+                  </span>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <button onClick={send} style={{
               width:36, height:36, borderRadius:10, border:"none",

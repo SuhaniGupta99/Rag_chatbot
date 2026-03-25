@@ -2,7 +2,7 @@ import ollama
 
 
 class LLMService:
-    def __init__(self, model="llama3:8b-instruct-q4_0"):
+    def __init__(self, model="phi3:mini"):
         self.model = model
 
     # 🔹 Normal (non-streaming)

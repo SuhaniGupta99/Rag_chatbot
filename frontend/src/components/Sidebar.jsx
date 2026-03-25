@@ -50,6 +50,7 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
   const navItems = [
     { id:"chat", emoji:"💬", label:"Chat" },
     { id:"sources", emoji:"📄", label:"Sources" },
+    { id:"settings", emoji:"⚙️", label:"Settings" },
   ];
 
   return (

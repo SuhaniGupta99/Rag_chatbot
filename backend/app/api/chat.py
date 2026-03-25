@@ -32,6 +32,7 @@ class ChatRequest(BaseModel):
     question: str
     top_k: int = 3
     session_id: str | None = None
+    model: str | None = "phi3:mini"
 
 
 # =====================================================
@@ -167,7 +168,7 @@ Conversation:
 def chat(request: ChatRequest):
     try:
         embedding_service = EmbeddingService()
-        llm_service = LLMService()
+        llm_service = LLMService(model=request.model)
         reranker = RerankerService()
 
         session_id = request.session_id or str(uuid.uuid4())
