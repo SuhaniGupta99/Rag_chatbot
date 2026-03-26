@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { C, fonts } from "../theme";
+import { fonts } from "../theme";
 import ReactMarkdown from "react-markdown";
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 
-const Badge = ({ children, color = C.cyan }) => (
-  <span style={{
+const Badge = ({ children, color }) => (
+    <span style={{
     padding:"3px 10px", borderRadius:99,
     border:`1px solid ${color}50`, background:`${color}12`,
     color, fontSize:11, fontFamily:fonts.mono,
@@ -13,19 +13,19 @@ const Badge = ({ children, color = C.cyan }) => (
   }}>{children}</span>
 );
 
-const scoreColor = v => v >= 0.88 ? C.green : v >= 0.72 ? C.cyan : C.amber;
+const scoreColor = (v, theme) => v >= 0.88 ? theme.green : v >= 0.72 ? theme.cyan : theme.amber;
 
-const fileIcon = name => {
+const fileIcon = (name, theme) => {
   const ext = name.split(".").pop().toLowerCase();
-  if (ext === "pdf")  return { icon:"📕", color:C.rose   };
-  if (ext === "md")   return { icon:"📝", color:C.cyan   };
-  if (ext === "txt")  return { icon:"📄", color:C.textSub};
-  if (ext === "docx") return { icon:"📘", color:C.violet };
-  return { icon:"📄", color:C.textSub };
+  if (ext === "pdf")  return { icon:"📕", color:theme.rose   };
+  if (ext === "md")   return { icon:"📝", color:theme.cyan   };
+  if (ext === "txt")  return { icon:"📄", color:theme.textSub};
+  if (ext === "docx") return { icon:"📘", color:theme.violet };
+  return { icon:"📄", color:theme.textSub };
 };
 
 // ─── CONFIDENCE CARD ─────────────────────────────────────────────────────────
-function ConfidenceCard({ scores }) {
+function ConfidenceCard({ scores, theme }) {
   const metrics = [
     { key:"faithfulness",     label:"Faithfulness",       tip:"How grounded the answer is in source docs"  },
     { key:"answer_relevance", label:"Answer Relevance",    tip:"How relevant the answer is to the question" },
@@ -36,31 +36,31 @@ function ConfidenceCard({ scores }) {
   return (
     <div style={{
       marginTop:8,
-      background:C.raised, border:`1px solid ${C.border}`,
+      background:theme.raised, border:`1px solid ${theme.border}`,
       borderRadius:12, padding:"16px 18px",
       display:"flex", flexDirection:"column", gap:14,
       animation:"fadeIn .25s cubic-bezier(.22,1,.36,1) both",
     }}>
-      <p style={{ fontSize:10, fontFamily:fonts.mono, color:C.textFaint, letterSpacing:1 }}>
+      <p style={{ fontSize:10, fontFamily:fonts.mono, color:theme.textFaint, letterSpacing:1 }}>
         CONFIDENCE SCORES
       </p>
       {metrics.map(m => {
         const val = scores[m.key] ?? 0;
         const pct = Math.round(val * 100);
-        const col = scoreColor(val);
+        const col = scoreColor(val, theme);        
         return (
           <div key={m.key}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
               <div>
-                <p style={{ fontSize:13, color:C.text, fontWeight:500 }}>{m.label}</p>
-                <p style={{ fontSize:11, color:C.textFaint, marginTop:1 }}>{m.tip}</p>
+                <p style={{ fontSize:13, color:theme.text, fontWeight:500 }}>{m.label}</p>
+                <p style={{ fontSize:11, color:theme.textFaint, marginTop:1 }}>{m.tip}</p>
               </div>
               <span style={{
                 fontFamily:fonts.mono, fontSize:16, fontWeight:700,
                 color:col, flexShrink:0, marginLeft:12,
               }}>{pct}%</span>
             </div>
-            <div style={{ height:5, background:C.border, borderRadius:99 }}>
+            <div style={{ height:5, background:theme.border, borderRadius:99 }}>
               <div style={{
                 height:"100%", borderRadius:99, background:col,
                 width:`${pct}%`,
@@ -75,7 +75,7 @@ function ConfidenceCard({ scores }) {
 }
 
 // ─── MESSAGE BUBBLE ───────────────────────────────────────────────────────────
-function MessageBubble({ msg, idx }) {
+function MessageBubble({ msg, idx , theme}) {
   const [showScores, setShowScores] = useState(false);
   const isUser = msg.role === "user";
 
@@ -91,8 +91,8 @@ function MessageBubble({ msg, idx }) {
       <div style={{
         width:32, height:32, borderRadius:10, flexShrink:0,
         background: isUser
-          ? `linear-gradient(135deg,${C.violet},${C.rose})`
-          : `linear-gradient(135deg,${C.cyan},#0066FF)`,
+          ? `linear-gradient(135deg,${theme.violet},${theme.rose})`
+          : `linear-gradient(135deg,${theme.cyan},#0066FF)`,
         display:"flex", alignItems:"center", justifyContent:"center",
         fontSize:12, fontWeight:700,
         color: isUser ? "#fff" : "#000",
@@ -101,8 +101,8 @@ function MessageBubble({ msg, idx }) {
 
       <div style={{ maxWidth:"72%" }}>
        <div style={{
-  background: isUser ? `${C.violet}15` : C.surface,
-  border:`1px solid ${isUser ? C.violet+"40" : C.border}`,
+  background: isUser ? `${theme.violet}15` : theme.surface,
+  border:`1px solid ${isUser ? theme.violet+"40" : theme.border}`,
   borderRadius: isUser ? "14px 3px 14px 14px" : "3px 14px 14px 14px",
   padding:"14px 18px", // 🔥 slightly bigger
   display:"flex",      // 🔥 important
@@ -112,7 +112,7 @@ function MessageBubble({ msg, idx }) {
             <div style={{ display:"flex", gap:5, alignItems:"center", height:20 }}>
               {[0,1,2].map(j => (
                 <div key={j} style={{
-                  width:7, height:7, borderRadius:"50%", background:C.cyan,
+                  width:7, height:7, borderRadius:"50%", background:theme.cyan,
                   animation:`dot 1.4s ${j*.2}s ease-in-out infinite`,
                 }}/>
               ))}
@@ -121,14 +121,14 @@ function MessageBubble({ msg, idx }) {
             <div style={{ 
   fontSize:14, 
   lineHeight:1.6,  // 🔥 slightly tighter
-  color:C.text, 
+  color:theme.text, 
   whiteSpace:"pre-line",
   margin:0         // 🔥 removes extra spacing
 }}>
   <ReactMarkdown
     components={{
       strong: ({node, ...props}) => (
-        <strong style={{ fontWeight: 700, color: "#fff" }} {...props} />
+        <strong style={{ fontWeight: 700, color: theme.text }} {...props} />
       ),
       p: ({node, ...props}) => (
         <p style={{ marginBottom: "8px" }} {...props} />
@@ -144,7 +144,7 @@ function MessageBubble({ msg, idx }) {
           )}
           {msg.sources?.length > 0 && (
             <div style={{ marginTop:10, display:"flex", gap:6, flexWrap:"wrap" }}>
-              {msg.sources.map((s,j) => <Badge key={j} color={C.cyan}>📄 {s}</Badge>)}
+              {msg.sources.map((s,j) => <Badge key={j} color={theme.cyan}>📄 {s}</Badge>)}
             </div>
           )}
         </div>
@@ -154,15 +154,15 @@ function MessageBubble({ msg, idx }) {
             <button onClick={() => setShowScores(p => !p)} style={{
               display:"flex", alignItems:"center", gap:7,
               padding:"5px 12px", borderRadius:8,
-              background:"transparent", border:`1px solid ${C.border}`,
-              color:C.textSub, fontSize:12, cursor:"pointer",
+              background:"transparent", border:`1px solid ${theme.border}`,
+              color:theme.textSub, fontSize:12, cursor:"pointer",
               transition:"all .18s", fontFamily:fonts.body,
             }}>
               <span>📊</span>
               <span>{showScores ? "Hide" : "View"} confidence scores</span>
-              <span style={{ color:C.textFaint, fontSize:10 }}>{showScores ? "▲" : "▼"}</span>
+              <span style={{ color:theme.textFaint, fontSize:10 }}>{showScores ? "▲" : "▼"}</span>
             </button>
-            {showScores && <ConfidenceCard scores={msg.scores} />}
+            {showScores && <ConfidenceCard scores={msg.scores} theme={theme} />}
           </div>
         )}
 
@@ -173,7 +173,7 @@ function MessageBubble({ msg, idx }) {
 }
 
 // ─── UPLOAD ZONE ─────────────────────────────────────────────────────────────
-function UploadZone({ files, setFiles, collapsed, setCollapsed, setHasUploaded }) {
+function UploadZone({ files, setFiles, collapsed, setCollapsed, setHasUploaded, theme }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef();
 
@@ -217,7 +217,7 @@ setHasUploaded(true); // ✅ OUTSIDE
   };
 
   return (
-    <div style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, flexShrink:0 }}>
+    <div style={{ background:theme.surface, borderBottom:`1px solid ${theme.border}`, flexShrink:0 }}>
 
       {/* Header */}
       <div onClick={() => setCollapsed(p => !p)} style={{
@@ -228,10 +228,10 @@ setHasUploaded(true); // ✅ OUTSIDE
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <span style={{ fontSize:18 }}>📂</span>
           <div>
-            <p style={{ fontSize:14, fontWeight:700, color:C.text, fontFamily:fonts.display }}>
+            <p style={{ fontSize:14, fontWeight:700, color:theme.text, fontFamily:fonts.display }}>
               Documents
             </p>
-            <p style={{ fontSize:11, color:C.textFaint, fontFamily:fonts.mono }}>
+            <p style={{ fontSize:11, color:theme.textFaint, fontFamily:fonts.mono }}>
               {files.length === 0
               ? "No documents — upload to start chatting"
               : `${files.length} documents available`}
@@ -240,11 +240,11 @@ setHasUploaded(true); // ✅ OUTSIDE
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           {files.length > 0 && (
-            <Badge color={C.green}>
+            <Badge color={theme.green}>
               {files.filter(f=>f.status==="ready").length} indexed
             </Badge>
           )}
-          <span style={{ color:C.textFaint, fontSize:12, fontFamily:fonts.mono }}>
+          <span style={{ color:theme.textFaint, fontSize:12, fontFamily:fonts.mono }}>
             <span style={{
   display:"inline-block",
   transform: collapsed ? "rotate(0deg)" : "rotate(180deg)",
@@ -290,27 +290,27 @@ setHasUploaded(true); // ✅ OUTSIDE
             }}
             onClick={() => inputRef.current.click()}
             style={{
-              border:`2px dashed ${dragging ? C.cyan : C.border}`,
+              border:`2px dashed ${dragging ? theme.cyan : theme.border}`,
               borderRadius:14, padding:"28px 20px",
               textAlign:"center", cursor:"pointer",
               transition:"all .2s",
-              background: dragging ? `${C.cyan}08` : C.bg,
+              background: dragging ? `${theme.cyan}08` : theme.bg,
               marginBottom: files.length > 0 ? 16 : 0,
             }}>
             <div style={{ fontSize:36, marginBottom:10 }}>
               {dragging ? "⬇️" : "📂"}
             </div>
-            <p style={{ fontSize:15, fontWeight:600, color: dragging ? C.cyan : C.textSub, marginBottom:6 }}>
+            <p style={{ fontSize:15, fontWeight:600, color: dragging ? theme.cyan : theme.textSub, marginBottom:6 }}>
               {dragging ? "Drop to upload!" : "Drag & drop files here"}
             </p>
-            <p style={{ fontSize:12, color:C.textFaint, fontFamily:fonts.mono, marginBottom:14 }}>
+            <p style={{ fontSize:12, color:theme.textFaint, fontFamily:fonts.mono, marginBottom:14 }}>
               PDF · MD · TXT · DOCX · CSV
             </p>
             <button
               onClick={e => { e.stopPropagation(); inputRef.current.click(); }}
               style={{
                 padding:"9px 24px", borderRadius:10,
-                background:`linear-gradient(135deg,${C.cyan},#0066FF)`,
+                background:`linear-gradient(135deg,${theme.cyan},#0066FF)`,
                 border:"none", color:"#000",
                 fontSize:13, fontWeight:700, fontFamily:fonts.display,
                 cursor:"pointer",
@@ -321,17 +321,17 @@ setHasUploaded(true); // ✅ OUTSIDE
           {/* File cards */}
           {files.length > 0 && (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              <p style={{ fontSize:10, fontFamily:fonts.mono, color:C.textFaint, letterSpacing:1, marginBottom:2 }}>
+              <p style={{ fontSize:10, fontFamily:fonts.mono, color:theme.textFaint, letterSpacing:1, marginBottom:2 }}>
                 UPLOADED FILES
               </p>
               {files.map(f => {
-                const { icon, color } = fileIcon(f.name);
+                const { icon, color } = fileIcon(f.name, theme)
                 return (
                   <div key={f.name} style={{
                     display:"flex", alignItems:"center", gap:14,
                     padding:"13px 16px",
-                    background:C.raised,
-                    border:`1px solid ${f.status==="ready" ? C.green+"30" : C.border}`,
+                    background:theme.raised,
+                    border:`1px solid ${f.status==="ready" ? theme.green+"30" : theme.border}`,
                     borderRadius:12, transition:"border-color .3s",
                   }}>
                     <div style={{
@@ -342,12 +342,12 @@ setHasUploaded(true); // ✅ OUTSIDE
                     }}>{icon}</div>
 
                     <div style={{ flex:1, minWidth:0 }}>
-                      <p style={{ fontSize:13, fontWeight:600, color:C.text, marginBottom:6 }}>{f.name}</p>
-                      <div style={{ height:4, background:C.border, borderRadius:99 }}>
+                      <p style={{ fontSize:13, fontWeight:600, color:theme.text, marginBottom:6 }}>{f.name}</p>
+                      <div style={{ height:4, background:theme.border, borderRadius:99 }}>
                         <div style={{
                           height:"100%", borderRadius:99,
                           width:`${f.progress}%`,
-                          background: f.status==="ready" ? C.green : C.cyan,
+                          background: f.status==="ready" ? theme.green : theme.cyan,
                           transition:"width .3s ease, background .3s",
                         }}/>
                       </div>
@@ -355,10 +355,10 @@ setHasUploaded(true); // ✅ OUTSIDE
 
                     <div style={{ flexShrink:0 }}>
                       {f.status === "ready"
-                        ? <Badge color={C.green}>✓ Ready</Badge>
+                        ? <Badge color={theme.green}>✓ Ready</Badge>
                         : f.status === "error"
-                        ? <Badge color={C.rose}>✗ Failed</Badge>
-                        : <Badge color={C.amber}>⟳ Indexing…</Badge>}
+                        ? <Badge color={theme.rose}>✗ Failed</Badge>
+                        : <Badge color={theme.amber}>⟳ Indexing…</Badge>}
                     </div>
 
                     <button
@@ -375,7 +375,7 @@ setHasUploaded(true); // ✅ OUTSIDE
                         }
                       }}
                       style={{
-                        background:"none", border:"none", color:C.textFaint,
+                        background:"none", border:"none", color:theme.textFaint,
                         fontSize:18, lineHeight:1, cursor:"pointer",
                         flexShrink:0, transition:"color .15s",
                       }}>×</button>
@@ -394,7 +394,8 @@ export default function HomePage({
   activeSession,
   setActiveSession,
   collapsed,
-  setCollapsed
+  setCollapsed,
+  theme
 }) {
   
   const [files, setFiles] = useState([]);
@@ -640,19 +641,19 @@ localStorage.setItem("sessions", JSON.stringify(sessions));
       {/* Top bar */}
       <div style={{
         padding:"13px 24px",
-        background:C.surface, borderBottom:`1px solid ${C.border}`,
+        background:theme.surface, borderBottom:`1px solid ${theme.border}`,
         display:"flex", alignItems:"center", justifyContent:"space-between",
         flexShrink:0,
       }}>
         <div>
-          <span style={{ fontFamily:fonts.display, fontWeight:700, fontSize:16, color:C.text }}>
+          <span style={{ fontFamily:fonts.display, fontWeight:700, fontSize:16, color:theme.text }}>
             RAG Chatbot
           </span>
-          <p style={{ fontSize:11, color:C.textFaint, fontFamily:fonts.mono, marginTop:2 }}>
+          <p style={{ fontSize:11, color:theme.textFaint, fontFamily:fonts.mono, marginTop:2 }}>
             {files.filter(f => f.status === "ready").length} docs ready · ask anything
           </p>
         </div>
-        <Badge color={C.green}>● online</Badge>
+        <Badge color={theme.green}>● online</Badge>
       </div>
 
       {/* Upload zone */}
@@ -662,21 +663,23 @@ localStorage.setItem("sessions", JSON.stringify(sessions));
   collapsed={collapsed}
   setCollapsed={setCollapsed}
   setHasUploaded={setHasUploaded}
+  theme={theme}   // ✅ ADD THIS
+
 />
 
       {/* Messages */}
       <div style={{ flex:1, overflowY:"auto", padding:"24px 28px", display:"flex", flexDirection:"column", gap:18 }}>
-        {msgs.map((msg, i) => <MessageBubble key={i} msg={msg} idx={i} />)}
+        {msgs.map((msg, i) => <MessageBubble key={i} msg={msg} idx={i} theme={theme}/>)}
         <div ref={bottomRef} />
       </div>
 
       {/* Input bar */}
       <div style={{
         padding:"12px 24px 18px",
-        background:C.surface, borderTop:`1px solid ${C.border}`, flexShrink:0,
+        background:theme.surface, borderTop:`1px solid ${theme.border}`, flexShrink:0,
       }}>
         <div style={{
-          background:C.bg, border:`1px solid ${C.border}`,
+          background:theme.bg, border:`1px solid ${theme.border}`,
           borderRadius:14, padding:"11px 14px",
           display:"flex", alignItems:"flex-end", gap:10,
         }}>
@@ -688,16 +691,16 @@ localStorage.setItem("sessions", JSON.stringify(sessions));
             rows={1}
             style={{
               flex:1, background:"none", border:"none", outline:"none",
-              color:C.text, fontSize:14, lineHeight:1.6,
+              color:theme.text, fontSize:14, lineHeight:1.6,
               resize:"none", maxHeight:120, overflowY:"auto",
               fontFamily:fonts.body,
             }}
           />
           <span style={{
             fontSize:13,
-            color:C.textSub,
+            color:theme.textSub,
             fontFamily:fonts.mono,
-            background:C.border,
+            background:theme.border,
             padding:"3px 8px",
             borderRadius:6,
             }}>
@@ -712,16 +715,16 @@ localStorage.setItem("sessions", JSON.stringify(sessions));
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <button onClick={send} style={{
               width:36, height:36, borderRadius:10, border:"none",
-              background: val.trim() ? `linear-gradient(135deg,${C.cyan},#0066FF)` : C.border,
-              color: val.trim() ? "#000" : C.textSub,
+              background: val.trim() ? `linear-gradient(135deg,${theme.cyan},#0066FF)` : theme.border,
+              color: val.trim() ? "#000" : theme.textSub,
               fontSize:18, fontWeight:700,
               display:"flex", alignItems:"center", justifyContent:"center",
               transition:"all .18s", cursor:"pointer",
-              boxShadow: val.trim() ? `0 0 14px ${C.cyan}30` : "none",
+              boxShadow: val.trim() ? `0 0 14px ${theme.cyan}30` : "none",
             }}>↑</button>
           </div>
         </div>
-        <p style={{ textAlign:"center", marginTop:7, fontSize:11, color:C.textFaint, fontFamily:fonts.mono }}>
+        <p style={{ textAlign:"center", marginTop:7, fontSize:11, color:theme.textFaint, fontFamily:fonts.mono }}>
           ↵ Send · ⇧↵ New line
         </p>
       </div>

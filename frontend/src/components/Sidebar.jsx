@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { C, fonts } from "../theme";
+import { fonts } from "../theme";
 
-export default function Sidebar({ view, setView, activeSession, setActiveSession }) {
+export default function Sidebar({ view, setView, activeSession, setActiveSession, theme }) {
   const deleteSession = (id) => {
   const sessions = JSON.parse(localStorage.getItem("sessions") || "[]");
 
@@ -56,8 +56,8 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
   return (
     <aside style={{
       width:240,
-      background:C.surface,
-      borderRight:`1px solid ${C.border}`,
+      background:theme.surface,
+      borderRight:`1px solid ${theme.border}`,
       display:"flex",
       flexDirection:"column",
       height:"100vh",
@@ -66,18 +66,18 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
       {/* Logo */}
       <div style={{
         padding:"20px 16px",
-        borderBottom:`1px solid ${C.border}`,
+        borderBottom:`1px solid ${theme.border}`,
         display:"flex",
         alignItems:"center",
         gap:10,
       }}>
         <div style={{
           width:32, height:32, borderRadius:9,
-          background:`linear-gradient(135deg,${C.cyan},#0066FF)`,
+          background:`linear-gradient(135deg,${theme.cyan},#0066FF)`,
           display:"flex", alignItems:"center", justifyContent:"center",
           fontWeight:800, color:"#000",
         }}>R</div>
-        <span style={{ fontWeight:700, fontSize:16, color:C.text }}>
+        <span style={{ fontWeight:700, fontSize:16, color:theme.text }}>
           RAGChat
         </span>
       </div>
@@ -91,8 +91,8 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
               padding:10,
               borderRadius:10,
               border:"none",
-              background: view===it.id ? `${C.cyan}14` : "transparent",
-              color: view===it.id ? C.cyan : C.textSub,
+              background: view===it.id ? `${theme.cyan}14` : "transparent",
+              color: view===it.id ? theme.cyan : theme.textSub,
               cursor:"pointer",
               textAlign:"left",
             }}>
@@ -109,7 +109,7 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
             padding:"10px",
             borderRadius:10,
             border:"none",
-            background:`linear-gradient(135deg,${C.cyan},#0066FF)`,
+            background:`linear-gradient(135deg,${theme.cyan},#0066FF)`,
             color:"#000",
             fontWeight:600,
             cursor:"pointer",
@@ -131,8 +131,8 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
       transition:"all 0.2s ease",
       borderRadius:9,
       cursor:"pointer",
-      borderLeft:`2px solid ${activeSession===s.id ? C.cyan : "transparent"}`,
-      background: activeSession===s.id ? `${C.cyan}0D` : "transparent",
+      borderLeft:`2px solid ${activeSession===s.id ? theme.cyan : "transparent"}`,
+      background: activeSession===s.id ? `${theme.cyan}0D` : "transparent",
     }}
   >
 
@@ -152,7 +152,7 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
       <p style={{
   fontSize:13,
   fontWeight: activeSession===s.id ? 600 : 400,
-  color: activeSession===s.id ? C.text : C.textSub,
+  color: activeSession===s.id ? theme.text : theme.textSub,
 }}>
         {s.title}
       </p>
@@ -169,7 +169,7 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
         marginLeft:6,
         background:"none",
         border:"none",
-        color:C.textFaint,
+        color:theme.textFaint,
         fontSize:14,
         cursor:"pointer",
       }}

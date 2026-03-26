@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { C, fonts } from "../theme";
+import { fonts } from "../theme";
 
-export default function SourcesPanel() {
-
+export default function SourcesPanel({ theme }) {
   const [sources, setSources] = useState([]);
 
   // ✅ Fetch documents from backend
@@ -58,7 +57,7 @@ export default function SourcesPanel() {
     <div style={{ flex:1, overflowY:"auto", padding:"24px" }}>
       <p style={{
         fontFamily:fonts.mono, fontSize:10,
-        color:C.textFaint, letterSpacing:1, marginBottom:16,
+        color:theme.textFaint, letterSpacing:1, marginBottom:16,
       }}>
         DOCUMENTS · {sources.length}
       </p>
@@ -66,9 +65,9 @@ export default function SourcesPanel() {
       <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
         {sources.map((s, i) => {
           return (
-            <div key={i} style={{
-              background:C.surface,
-              border:`1px solid ${C.border}`,
+            <div key={s.document_id} style={{
+              background:theme.surface,
+              border:`1px solid ${theme.border}`,
               borderRadius:14,
               padding:"16px 18px",
               cursor:"pointer",
@@ -89,9 +88,9 @@ export default function SourcesPanel() {
                   width:30,
                   height:30,
                   borderRadius:8,
-                  border:`1px solid ${C.border}`,
-                  background:C.bg,
-                  color:C.textSub,
+                  border:`1px solid ${theme.border}`,
+                  background:theme.bg,
+                  color:theme.textSub,
                   fontSize:18,
                   fontWeight:"bold",
                   display:"flex",
@@ -100,8 +99,8 @@ export default function SourcesPanel() {
                   cursor:"pointer",
                   transition:"all .2s",
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = C.rose + "20"}
-                onMouseLeave={e => e.currentTarget.style.background = C.bg}
+                onMouseEnter={e => e.currentTarget.style.background = theme.rose + "20"}
+                onMouseLeave={e => e.currentTarget.style.background = theme.bg}
               >
                 ×
               </button>
@@ -117,7 +116,7 @@ export default function SourcesPanel() {
                   <p style={{
                     fontSize:14,
                     fontWeight:600,
-                    color:C.text,
+                    color:theme.text,
                     marginBottom:5,
                   }}>
                     {s.name}
@@ -127,8 +126,8 @@ export default function SourcesPanel() {
                     <span style={{
                       padding:"2px 8px",
                       borderRadius:99,
-                      border:`1px solid ${C.border}`,
-                      color:C.textSub,
+                      border:`1px solid ${theme.border}`,
+                      color:theme.textSub,
                       fontSize:11,
                       fontFamily:fonts.mono,
                     }}>
@@ -137,7 +136,7 @@ export default function SourcesPanel() {
 
                     <span style={{
                       fontSize:11,
-                      color:C.textFaint,
+                      color:theme.textFaint,
                       fontFamily:fonts.mono,
                     }}>
                       {s.pages}
@@ -150,8 +149,8 @@ export default function SourcesPanel() {
               <p style={{
                 fontSize:12,
                 lineHeight:1.7,
-                color:C.textSub,
-                borderLeft:`3px solid ${C.cyan}40`,
+                color:theme.textSub,
+                borderLeft:`3px solid ${theme.cyan}40`,
                 paddingLeft:10,
               }}>
                 {s.excerpt}

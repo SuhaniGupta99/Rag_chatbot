@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { C, fonts } from "./theme";
+import { useState, useEffect } from "react";
+import { themes, fonts } from "./theme";
 import Sidebar from "./components/Sidebar";
 import HomePage from "./components/HomePage";
 import SourcesPanel from "./components/SourcesPanel";
@@ -11,17 +11,21 @@ export default function App() {
 );
   const [view, setView] = useState("chat");
   const [uploadCollapsed, setUploadCollapsed] = useState(false);
-  
-
+  const [theme, setTheme] = useState(
+  localStorage.getItem("theme") || "dark"
+);
+useEffect(() => {
+  localStorage.setItem("theme", theme);
+}, [theme]);
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=Fira+Code:wght@400;500&display=swap');
         *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
         html, body, #root { height:100%; }
-        body { background:${C.bg}; color:${C.text}; font-family:${fonts.body}; }
+        body { background:${themes[theme].bg}; color:${themes[theme].text}; font-family:${fonts.body}; }
         ::-webkit-scrollbar { width:4px; }
-        ::-webkit-scrollbar-thumb { background:${C.border}; border-radius:99px; }
+        ::-webkit-scrollbar-thumb { background:${themes[theme].border}; border-radius:99px; }
         button { cursor:pointer; font-family:${fonts.body}; }
         textarea { font-family:${fonts.body}; }
         @keyframes fadeUp {
@@ -43,15 +47,16 @@ export default function App() {
         height:"100vh",
         width:"100vw",
         overflow:"hidden",
-        background:C.bg,
+        background:themes[theme].bg,
       }}>
         {/* Sidebar — always visible */}
         <Sidebar
-          view={view}
-          setView={setView}
-          activeSession={activeSession}
-          setActiveSession={setActiveSession}
-        />
+  view={view}
+  setView={setView}
+  activeSession={activeSession}
+  setActiveSession={setActiveSession}
+  theme={themes[theme]}
+/>
 
         {/* Main content area */}
         {view === "chat" && (
@@ -60,6 +65,7 @@ export default function App() {
   setActiveSession={setActiveSession}
   collapsed={uploadCollapsed}
   setCollapsed={setUploadCollapsed}
+  theme={themes[theme]}
 />
 )}
 
@@ -69,20 +75,20 @@ export default function App() {
             display:"flex",
             flexDirection:"column",
             overflow:"hidden",
-            background:C.bg,
+            background:themes[theme].bg,
           }}>
             {/* Page header */}
             <div style={{
               padding:"14px 24px",
-              background:C.surface,
-              borderBottom:`1px solid ${C.border}`,
+              background:themes[theme].surface,
+              borderBottom:`1px solid ${themes[theme].border}`,
               flexShrink:0,
             }}>
               <span style={{
   fontFamily:fonts.display,
   fontWeight:700,
   fontSize:16,
-  color:C.text,
+  color:themes[theme].text,
 }}>
   {view === "sources"
     ? "📄 Retrieved Sources"
@@ -91,7 +97,7 @@ export default function App() {
 
 <p style={{
   fontSize:11,
-  color:C.textFaint,
+  color:themes[theme].textFaint,
   fontFamily:fonts.mono,
   marginTop:2,
 }}>
@@ -101,8 +107,15 @@ export default function App() {
 </p>
             </div>
 
-            {view === "sources"  && <SourcesPanel />}
-            {view === "settings" && <SettingsPanel />}
+            {view === "sources" && (
+  <SourcesPanel theme={themes[theme]} />
+)}
+            {view === "settings" && (
+  <SettingsPanel 
+    theme={themes[theme]} 
+    setTheme={setTheme} 
+  />
+)}
           </div>
         )}
       </div>
