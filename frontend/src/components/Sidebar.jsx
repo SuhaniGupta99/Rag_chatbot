@@ -122,11 +122,13 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
       <div style={{ flex:1, overflowY:"auto", padding:"10px" }}>
         {sessions.map(s => (
   <div key={s.id}
-    style={{
-      display:"flex",
-      alignItems:"center",
-      justifyContent:"space-between",
-      padding:"9px 10px",
+  style={{
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"space-between",
+    padding:"12px 12px",     // 🔥 more padding
+    marginBottom:"8px",      // 🔥 space between chats
+      transition:"all 0.2s ease",
       borderRadius:9,
       cursor:"pointer",
       borderLeft:`2px solid ${activeSession===s.id ? C.cyan : "transparent"}`,
@@ -136,28 +138,25 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
 
     {/* CLICK AREA */}
     <div
-      onClick={() => {
-        setActiveSession(s.id);
-        localStorage.setItem("activeSession", s.id);
-        setView("chat");
-      }}
-      style={{ flex:1 }}
-    >
+  onClick={() => {
+    setActiveSession(s.id);
+    localStorage.setItem("activeSession", s.id);
+    setView("chat");
+  }}
+  style={{
+    flex:1,
+    display:"flex",
+    alignItems:"center"  // 🔥 THIS FIXES CENTERING
+  }}
+>
       <p style={{
-        fontSize:12,
-        fontWeight: activeSession===s.id ? 600 : 400,
-        color: activeSession===s.id ? C.text : C.textSub,
-        marginBottom:2,
-      }}>
+  fontSize:13,
+  fontWeight: activeSession===s.id ? 600 : 400,
+  color: activeSession===s.id ? C.text : C.textSub,
+}}>
         {s.title}
       </p>
-      <span style={{
-        fontSize:10,
-        color:C.textFaint,
-        fontFamily:fonts.mono,
-      }}>
-        {s.time}
-      </span>
+      
     </div>
 
     {/* 🔥 DELETE BUTTON */}

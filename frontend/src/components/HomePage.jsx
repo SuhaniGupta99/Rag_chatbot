@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { C, fonts } from "../theme";
-
+import ReactMarkdown from "react-markdown";
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+
 const Badge = ({ children, color = C.cyan }) => (
   <span style={{
     padding:"3px 10px", borderRadius:99,
@@ -81,7 +83,8 @@ function MessageBubble({ msg, idx }) {
     <div style={{
       display:"flex",
       flexDirection: isUser ? "row-reverse" : "row",
-      gap:10, alignItems:"flex-start",
+      gap:10,
+      alignItems:"center",  
       animation:"fadeUp .3s cubic-bezier(.22,1,.36,1) both",
       animationDelay:`${idx * .04}s`,
     }}>
@@ -97,12 +100,14 @@ function MessageBubble({ msg, idx }) {
       }}>{isUser ? "U" : "AI"}</div>
 
       <div style={{ maxWidth:"72%" }}>
-        <div style={{
-          background: isUser ? `${C.violet}15` : C.surface,
-          border:`1px solid ${isUser ? C.violet+"40" : C.border}`,
-          borderRadius: isUser ? "14px 3px 14px 14px" : "3px 14px 14px 14px",
-          padding:"12px 16px",
-        }}>
+       <div style={{
+  background: isUser ? `${C.violet}15` : C.surface,
+  border:`1px solid ${isUser ? C.violet+"40" : C.border}`,
+  borderRadius: isUser ? "14px 3px 14px 14px" : "3px 14px 14px 14px",
+  padding:"14px 18px", // 🔥 slightly bigger
+  display:"flex",      // 🔥 important
+  alignItems:"center", // 🔥 vertical centering
+}}>
           {msg.typing ? (
             <div style={{ display:"flex", gap:5, alignItems:"center", height:20 }}>
               {[0,1,2].map(j => (
@@ -113,9 +118,29 @@ function MessageBubble({ msg, idx }) {
               ))}
             </div>
           ) : (
-            <p style={{ fontSize:14, lineHeight:1.8, color:C.text, whiteSpace:"pre-line" }}>
-              {msg.content}
-            </p>
+            <div style={{ 
+  fontSize:14, 
+  lineHeight:1.6,  // 🔥 slightly tighter
+  color:C.text, 
+  whiteSpace:"pre-line",
+  margin:0         // 🔥 removes extra spacing
+}}>
+  <ReactMarkdown
+    components={{
+      strong: ({node, ...props}) => (
+        <strong style={{ fontWeight: 700, color: "#fff" }} {...props} />
+      ),
+      p: ({node, ...props}) => (
+        <p style={{ marginBottom: "8px" }} {...props} />
+      ),
+      li: ({node, ...props}) => (
+        <li style={{ marginBottom: "6px" }} {...props} />
+      ),
+    }}
+  >
+    {msg.content}
+  </ReactMarkdown>
+</div>
           )}
           {msg.sources?.length > 0 && (
             <div style={{ marginTop:10, display:"flex", gap:6, flexWrap:"wrap" }}>
@@ -141,25 +166,24 @@ function MessageBubble({ msg, idx }) {
           </div>
         )}
 
-        <div style={{
-          marginTop:4, fontSize:10, color:C.textFaint,
-          fontFamily:fonts.mono,
-          textAlign: isUser ? "right" : "left",
-        }}>{msg.time}</div>
+       
       </div>
     </div>
   );
 }
 
 // ─── UPLOAD ZONE ─────────────────────────────────────────────────────────────
-function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
+function UploadZone({ files, setFiles, collapsed, setCollapsed, setHasUploaded }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef();
 
   const addFile = async (file) => {
     const name = file.name ?? file;
     if (files.find(f => f.name === name)) return;
-    setFiles(p => [...p, { name, status:"indexing", progress:50 }]);
+    setFiles(p => {
+      const updated = [...p, { name, status:"indexing", progress:50 }];
+      return updated;
+    });
 
     try {
       const formData = new FormData();
@@ -173,14 +197,22 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
       const data = await res.json();
       console.log("Upload response:", data);
 
-      setFiles(p => p.map(f =>
-        f.name === name ? { ...f, status:"ready", progress:100 } : f
-      ));
+      setFiles(p =>
+  p.map(f =>
+    f.name === name ? { ...f, status:"ready", progress:100 } : f
+  )
+);
+
+setHasUploaded(true); // ✅ OUTSIDE
+
     } catch (err) {
       console.error("Upload failed:", err);
-      setFiles(p => p.map(f =>
-        f.name === name ? { ...f, status:"error", progress:0 } : f
-      ));
+      setFiles(p => {
+        const updated = p.map(f =>
+          f.name === name ? { ...f, status:"error", progress:0 } : f
+        );
+        return updated;
+      });
     }
   };
 
@@ -201,8 +233,8 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
             </p>
             <p style={{ fontSize:11, color:C.textFaint, fontFamily:fonts.mono }}>
               {files.length === 0
-                ? "No documents — upload to start chatting"
-                : `${files.filter(f=>f.status==="ready").length} of ${files.length} ready`}
+              ? "No documents — upload to start chatting"
+              : `${files.length} documents available`}
             </p>
           </div>
         </div>
@@ -213,14 +245,29 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
             </Badge>
           )}
           <span style={{ color:C.textFaint, fontSize:12, fontFamily:fonts.mono }}>
-            {collapsed ? "▼ Show" : "▲ Hide"}
+            <span style={{
+  display:"inline-block",
+  transform: collapsed ? "rotate(0deg)" : "rotate(180deg)",
+  transition:"transform 0.3s ease"
+}}>
+  ▼
+</span>
           </span>
         </div>
       </div>
 
+
       {/* Expandable body */}
-      {!collapsed && (
-        <div style={{ padding:"0 24px 20px" }}>
+<div style={{
+  overflow: "hidden",
+  transition: "all 0.4s cubic-bezier(.16,1,.3,1)",
+  maxHeight: collapsed ? "0px" : "1000px",
+  opacity: collapsed ? 0 : 1,
+  transform: collapsed ? "translateY(-10px)" : "translateY(0)",
+  willChange: "max-height, opacity, transform",
+  filter: collapsed ? "blur(2px)" : "blur(0px)",
+}}>
+  <div style={{ padding:"0 24px 20px" }}>
           {/* Hidden real file input */}
           <input
             ref={inputRef}
@@ -268,7 +315,8 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
                 fontSize:13, fontWeight:700, fontFamily:fonts.display,
                 cursor:"pointer",
               }}>Browse Files</button>
-          </div>
+            </div>
+</div>
 
           {/* File cards */}
           {files.length > 0 && (
@@ -314,7 +362,18 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
                     </div>
 
                     <button
-                      onClick={() => setFiles(p => p.filter(x => x.name !== f.name))}
+                      onClick={async () => {
+                        try {
+                          await fetch(`http://localhost:8000/documents/${f.document_id}`, {
+                            method: "DELETE"
+                          });
+                          
+                          setFiles(p => p.filter(x => x.document_id !== f.document_id));
+                        
+                        } catch (err) {
+                          console.error("Delete failed:", err);
+                        }
+                      }}
                       style={{
                         background:"none", border:"none", color:C.textFaint,
                         fontSize:18, lineHeight:1, cursor:"pointer",
@@ -326,16 +385,19 @@ function UploadZone({ files, setFiles, collapsed, setCollapsed }) {
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
-export default function HomePage({ activeSession, setActiveSession }) {
+export default function HomePage({
+  activeSession,
+  setActiveSession,
+  collapsed,
+  setCollapsed
+}) {
   
-  const [files, setFiles]       = useState([]);
-  const [collapsed, setCollapsed] = useState(false);
+  const [files, setFiles] = useState([]);
   const [val, setVal]           = useState("");
   const selectedModel = localStorage.getItem("selectedModel") || "phi3:mini";
   const [msgs, setMsgs]         = useState([
@@ -354,9 +416,20 @@ export default function HomePage({ activeSession, setActiveSession }) {
   const sessions = JSON.parse(localStorage.getItem("sessions") || "[]");
   const current = sessions.find(s => s.id === activeSession);
 
-  if (current) {
-    setMsgs(current.messages || []);
+ if (current) {
+  if (!current.messages || current.messages.length === 0) {
+    setMsgs([
+      {
+        role: "assistant",
+        content: "Hi! Upload a document above and ask me anything about it.",
+        time: "just now",
+        sources: [],
+      }
+    ]);
   } else {
+    setMsgs(current.messages);
+  }
+} else {
     setMsgs([
   {
     role: "assistant",
@@ -367,7 +440,37 @@ export default function HomePage({ activeSession, setActiveSession }) {
 ]);
   }
 }, [activeSession]);
+  useEffect(() => {
+  const fetchDocs = async () => {
+    try {
+      const res = await fetch("http://localhost:8000/documents/");
+      const data = await res.json();
 
+      // 🔥 IMPORTANT: data is already array
+      const formatted = data.map(doc => ({
+        name: doc.filename,
+        status: "ready",
+        progress: 100,
+        document_id: doc.document_id,
+        chunks: doc.chunks
+      }));
+
+      setFiles(formatted);
+
+    } catch (err) {
+      console.error("Failed to fetch documents:", err);
+    }
+  };
+
+  fetchDocs();
+}, []);
+const [hasUploaded, setHasUploaded] = useState(false);
+
+useEffect(() => {
+  if (files.length > 0 && hasUploaded) {
+    setCollapsed(true);
+  }
+}, [files, hasUploaded]);
   const send = async () => {
   if (!val.trim()) return;
   if (!activeSession) {
@@ -378,11 +481,18 @@ export default function HomePage({ activeSession, setActiveSession }) {
   const sessions = JSON.parse(localStorage.getItem("sessions") || "[]");
 
   sessions.unshift({
-    id: newId,
-    title: "New Chat",
-    time: "now",
-    messages: []
-  });
+  id: newId,
+  title: "New Chat",
+  time: "now",
+  messages: [
+    {
+      role: "assistant",
+      content: "Hi! Upload a document above and ask me anything about it.",
+      time: "just now",
+      sources: [],
+    }
+  ]
+});
 
   localStorage.setItem("sessions", JSON.stringify(sessions));
 }
@@ -419,12 +529,7 @@ export default function HomePage({ activeSession, setActiveSession }) {
     let metricsText = "";
     let isMetrics = false;
 
-    // Replace typing bubble
-    setMsgs(p => [
-      ...p.filter(m => !m.typing),
-      { role: "assistant", content: "", time: "now", sources: [] },
-    ]);
-
+    let firstTokenReceived = false;
     while (!done) {
       const { value, done: doneReading } = await reader.read();
       done = doneReading;
@@ -439,6 +544,14 @@ export default function HomePage({ activeSession, setActiveSession }) {
       }
 
       if (!isMetrics) {
+        if (!firstTokenReceived) {
+          firstTokenReceived = true;
+          setMsgs(p => [
+            ...p.filter(m => !m.typing),
+            { role: "assistant", content: "", time: "now", sources: [] },
+          ]);
+        }
+
         fullText += chunk;
 
         setMsgs(prev => {
@@ -536,7 +649,7 @@ localStorage.setItem("sessions", JSON.stringify(sessions));
             RAG Chatbot
           </span>
           <p style={{ fontSize:11, color:C.textFaint, fontFamily:fonts.mono, marginTop:2 }}>
-            {files.filter(f=>f.status==="ready").length} docs ready · ask anything
+            {files.filter(f => f.status === "ready").length} docs ready · ask anything
           </p>
         </div>
         <Badge color={C.green}>● online</Badge>
@@ -544,9 +657,12 @@ localStorage.setItem("sessions", JSON.stringify(sessions));
 
       {/* Upload zone */}
       <UploadZone
-        files={files} setFiles={setFiles}
-        collapsed={collapsed} setCollapsed={setCollapsed}
-      />
+  files={files}
+  setFiles={setFiles}
+  collapsed={collapsed}
+  setCollapsed={setCollapsed}
+  setHasUploaded={setHasUploaded}
+/>
 
       {/* Messages */}
       <div style={{ flex:1, overflowY:"auto", padding:"24px 28px", display:"flex", flexDirection:"column", gap:18 }}>

@@ -10,6 +10,7 @@ export default function App() {
   localStorage.getItem("activeSession") || null
 );
   const [view, setView] = useState("chat");
+  const [uploadCollapsed, setUploadCollapsed] = useState(false);
   
 
   return (
@@ -55,9 +56,11 @@ export default function App() {
         {/* Main content area */}
         {view === "chat" && (
   <HomePage
-    activeSession={activeSession}
-    setActiveSession={setActiveSession}
-  />
+  activeSession={activeSession}
+  setActiveSession={setActiveSession}
+  collapsed={uploadCollapsed}
+  setCollapsed={setUploadCollapsed}
+/>
 )}
 
         {(view === "sources" || view === "settings")&& (
