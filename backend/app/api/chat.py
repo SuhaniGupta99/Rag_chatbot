@@ -218,7 +218,7 @@ def chat(request: ChatRequest):
         retrieval_confidence = compute_retrieval_confidence(matches)
 
         context = "\n\n".join(m["text"] for m in matches)
-        context = context[:2000]
+        context = context[:4000]
 
         recent_history = ""
         for turn in history[-MAX_HISTORY_TURNS:]:
