@@ -2,50 +2,56 @@ import { useEffect, useState } from "react";
 import { fonts } from "../theme";
 
 export default function Sidebar({ view, setView, activeSession, setActiveSession, theme }) {
-  const deleteSession = (id) => {
-  const sessions = JSON.parse(localStorage.getItem("sessions") || "[]");
+const deleteSession = async (id) => {
+  try {
+    await fetch(`http://localhost:8000/sessions/${id}`, {
+      method: "DELETE"
+    });
 
-  const updated = sessions.filter(s => s.id !== id);
+    setSessions(prev => prev.filter(s => s.id !== id));
 
-  localStorage.setItem("sessions", JSON.stringify(updated));
+    if (activeSession === id) {
+      setActiveSession(null);
+    }
 
-  setSessions(updated);
-
-  // 🔥 if deleted session was active → reset
-  if (activeSession === id) {
-    setActiveSession(updated.length ? updated[0].id : null);
-    localStorage.setItem("activeSession", updated.length ? updated[0].id : "");
+  } catch (err) {
+    console.error("Delete failed:", err);
   }
 };
 
   const [sessions, setSessions] = useState([]);
 
-  // ✅ LOAD sessions from localStorage
-  useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("sessions") || "[]");
-    setSessions(saved);
-  }, []);
-
-  // ✅ SAVE sessions
-  const updateSessions = (newSessions) => {
-    setSessions(newSessions);
-    localStorage.setItem("sessions", JSON.stringify(newSessions));
-  };
-
+ 
   // ✅ CREATE NEW CHAT
-  const createNewChat = () => {
-    const newSession = {
-      id: crypto.randomUUID(),
-      title: "New Chat",
-      time: "now",
-      messages: [],
-    };
+ const createNewChat = async () => {
+  try {
+    const res = await fetch("http://localhost:8000/sessions", {
+      method: "POST"
+    });
 
-    const updated = [newSession, ...sessions];
-    updateSessions(updated);
-    setActiveSession(newSession.id);
-    localStorage.setItem("activeSession", newSession.id);
+    const data = await res.json();
+
+    setActiveSession(data.session_id);
+    setView("chat");
+
+  } catch (err) {
+    console.error("Failed to create session:", err);
+  }
+};
+useEffect(() => {
+  const fetchSessions = async () => {
+    try {
+      const res = await fetch("http://localhost:8000/sessions");
+      const data = await res.json();
+
+      setSessions(data);
+    } catch (err) {
+      console.error("Failed to fetch sessions:", err);
+    }
   };
+
+  fetchSessions();
+}, [activeSession]);
 
   const navItems = [
     { id:"chat", emoji:"💬", label:"Chat" },
@@ -140,7 +146,6 @@ export default function Sidebar({ view, setView, activeSession, setActiveSession
     <div
   onClick={() => {
     setActiveSession(s.id);
-    localStorage.setItem("activeSession", s.id);
     setView("chat");
   }}
   style={{

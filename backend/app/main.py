@@ -4,6 +4,10 @@ from app.api.upload import router as upload_router
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 from app.services.vector_store import vector_store
+from app.db.database import engine
+from app.db import models
+
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="RAG Chatbot API")
 

@@ -10,6 +10,10 @@ from app.services.embeddings import EmbeddingService
 from app.services.vector_store import vector_store
 from app.services.llm import LLMService
 from app.services.reranker import RerankerService
+from sqlalchemy.orm import Session
+from fastapi import Depends
+from app.db.deps import get_db
+from app.db.models import ChatSession, Message
 
 from app.services.evaluation import (
     compute_context_relevance,
@@ -165,7 +169,7 @@ Conversation:
 
 
 @router.post("/chat")
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, db: Session = Depends(get_db)):
     try:
         embedding_service = EmbeddingService()
         llm_service = LLMService(model=request.model)
@@ -243,66 +247,126 @@ Current Question:
 Answer clearly and concisely.
 """
 
-        # =========================================
-        # 🔥 STREAMING GENERATOR
-        # =========================================
+# =========================================
+# 🔥 STREAMING GENERATOR
+# =========================================
         def token_stream():
             full_answer = ""
-
-            for token in llm_service.stream_answer(
-                question=request.question,
-                context=full_prompt
-            ):
-                full_answer += token
-                yield token
-
+            
+            try:
+                for token in llm_service.stream_answer(
+                    question=request.question,
+                    context=full_prompt
+                ):
+                    full_answer += token
+                    yield token
+            finally:
+                 # 🔥 ALWAYS RUNS (even if stream breaks)
+                session = db.query(ChatSession).filter_by(id=session_id).first()
+                if not session:
+                    session = ChatSession(
+                         id=session_id,
+                         title=request.question[:40]
+                    )
+                    db.add(session)
+                    db.commit()
+                db.add(Message(
+                    session_id=session_id,
+                    role="user",
+                    content=request.question
+                ))
+                db.add(Message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=full_answer
+                ))
+                db.commit()
             # ===============================
             # 🔥 RAG Evaluation Metrics
             # ===============================
-            answer_embedding = embedding_service.embed_query(full_answer)
-            context_embedding = embedding_service.embed_query(context)
-            question_embedding = embedding_service.embed_query(normalized_question)
+                answer_embedding = embedding_service.embed_query(full_answer)
+                context_embedding = embedding_service.embed_query(context)
+                question_embedding = embedding_service.embed_query(normalized_question)
 
-            context_relevance = compute_context_relevance(matches)
+                context_relevance = compute_context_relevance(matches)
 
-            faithfulness = compute_faithfulness(
-                answer_embedding,
-                context_embedding
-            )
-
-            answer_relevance = compute_answer_relevance(
-                question_embedding,
-                answer_embedding
-            )
-
-            rag_quality_score = compute_rag_quality(
-                retrieval_confidence,
-                context_relevance,
-                faithfulness,
-                answer_relevance
-            )
-
-            history.append({
-                "user": request.question,
-                "assistant": full_answer
-            })
-
-            history[:] = history[-MAX_HISTORY_TURNS:]
-
-            if len(history) % SUMMARY_UPDATE_INTERVAL == 0:
-                update_summary(session_id, llm_service)
-
-            yield "\n\n---METRICS---\n"
-            yield json.dumps({
-                "retrieval_confidence": retrieval_confidence,
-                "context_relevance": context_relevance,
-                "faithfulness": faithfulness,
-                "answer_relevance": answer_relevance,
-                "rag_quality_score": rag_quality_score
-            })
-
-        return StreamingResponse(token_stream(), media_type="text/plain")
-
+                faithfulness = compute_faithfulness(
+                    answer_embedding,
+                    context_embedding
+                    )
+                answer_relevance = compute_answer_relevance(
+                    question_embedding,
+                    answer_embedding
+                    )
+                rag_quality_score = compute_rag_quality(
+                    retrieval_confidence,
+                    context_relevance,
+                    faithfulness,
+                    answer_relevance
+                    )
+                history.append({
+                    "user": request.question,
+                    "assistant": full_answer
+                    })
+                history[:] = history[-MAX_HISTORY_TURNS:]
+                if len(history) % SUMMARY_UPDATE_INTERVAL == 0:
+                    update_summary(session_id, llm_service)
+                yield "\n\n---METRICS---\n"
+                yield json.dumps({
+                    "retrieval_confidence": retrieval_confidence,
+                    "context_relevance": context_relevance,
+                    "faithfulness": faithfulness,
+                    "answer_relevance": answer_relevance,
+                    "rag_quality_score": rag_quality_score
+                    })
+               
     except Exception as e:
         print("🔥 CHAT ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
+    return StreamingResponse(token_stream(), media_type="text/plain")
+
+    
+# =====================================================
+# 🔹 GET ALL SESSIONS
+# =====================================================
+@router.get("/sessions")
+def get_sessions(db: Session = Depends(get_db)):
+    sessions = db.query(ChatSession).order_by(ChatSession.created_at.desc()).all()
+    return sessions
+
+
+# =====================================================
+# 🔹 GET MESSAGES OF A SESSION
+# =====================================================
+@router.get("/messages/{session_id}")
+def get_messages(session_id: str, db: Session = Depends(get_db)):
+    messages = db.query(Message).filter_by(session_id=session_id).all()
+    return messages
+
+
+# =====================================================
+# 🔹 DELETE SESSION
+# =====================================================
+@router.delete("/sessions/{session_id}")
+def delete_session(session_id: str, db: Session = Depends(get_db)):
+    db.query(Message).filter_by(session_id=session_id).delete()
+    db.query(ChatSession).filter_by(id=session_id).delete()
+    db.commit()
+    return {"status": "deleted"}
+# =====================================================
+# 🔹 CREATE NEW SESSION (🔥 REQUIRED FIX)
+# =====================================================
+@router.post("/sessions")
+def create_session(db: Session = Depends(get_db)):
+    new_session = ChatSession(
+        id=str(uuid.uuid4()),
+        title="New Chat"
+    )
+
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    return {
+        "session_id": new_session.id
+    }

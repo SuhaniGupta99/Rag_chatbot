@@ -36,6 +36,11 @@ export default function SettingsPanel({ theme, setTheme }) {
       id: "llama3:8b-instruct-q4_0",
       label: "🧠 Smart (LLaMA 3)",
       desc: "Best reasoning and accuracy"
+    },
+    {
+      id: "groq:llama-3.3-70b-versatile",
+      label: "☁️ Cloud (LLaMA 3 70B - Groq)",
+      desc: "Best quality, fast cloud model"
     }
   ];
 

@@ -75,7 +75,7 @@ function ConfidenceCard({ scores, theme }) {
 }
 
 // ─── MESSAGE BUBBLE ───────────────────────────────────────────────────────────
-function MessageBubble({ msg, idx , theme}) {
+function MessageBubble({ msg, idx , theme, isLast }) {
   const [showScores, setShowScores] = useState(false);
   const isUser = msg.role === "user";
 
@@ -84,7 +84,7 @@ function MessageBubble({ msg, idx , theme}) {
       display:"flex",
       flexDirection: isUser ? "row-reverse" : "row",
       gap:10,
-      alignItems:"center",  
+      alignItems:"flex-start",  
       animation:"fadeUp .3s cubic-bezier(.22,1,.36,1) both",
       animationDelay:`${idx * .04}s`,
     }}>
@@ -125,6 +125,7 @@ function MessageBubble({ msg, idx , theme}) {
   whiteSpace:"pre-line",
   margin:0         // 🔥 removes extra spacing
 }}>
+  <div>
   <ReactMarkdown
     components={{
       strong: ({node, ...props}) => (
@@ -138,8 +139,13 @@ function MessageBubble({ msg, idx , theme}) {
       ),
     }}
   >
-    {msg.content}
+    {typeof msg.content === "string" ? msg.content : ""}
   </ReactMarkdown>
+
+  {/* 🔥 cursor OUTSIDE markdown */}
+{isLast && msg.typing && (
+  <span style={{ marginLeft: 4, opacity: 0.7 }}>▍</span>
+)}</div>
 </div>
           )}
           {msg.sources?.length > 0 && (
@@ -413,33 +419,34 @@ export default function HomePage({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior:"smooth" });
   }, [msgs]);
-  useEffect(() => {
-  const sessions = JSON.parse(localStorage.getItem("sessions") || "[]");
-  const current = sessions.find(s => s.id === activeSession);
+useEffect(() => {
+  const fetchMessages = async () => {
+    if (!activeSession) return;
 
- if (current) {
-  if (!current.messages || current.messages.length === 0) {
-    setMsgs([
-      {
+    try {
+      const res = await fetch(`http://localhost:8000/messages/${activeSession}`);
+      const data = await res.json();
+
+      const formatted = data.map(m => ({
+        role: m.role,
+        content: m.content,
+        time: "now",
+        sources: []
+      }));
+
+      setMsgs(formatted.length > 0 ? formatted : [{
         role: "assistant",
         content: "Hi! Upload a document above and ask me anything about it.",
         time: "just now",
-        sources: [],
-      }
-    ]);
-  } else {
-    setMsgs(current.messages);
-  }
-} else {
-    setMsgs([
-  {
-    role: "assistant",
-    content: "Hi! Upload a document above and ask me anything about it.",
-    time: "just now",
-    sources: [],
-  }
-]);
-  }
+        sources: []
+      }]);
+
+    } catch (err) {
+      console.error("Failed to fetch messages:", err);
+    }
+  };
+
+  fetchMessages();
 }, [activeSession]);
   useEffect(() => {
   const fetchDocs = async () => {
@@ -474,28 +481,11 @@ useEffect(() => {
 }, [files, hasUploaded]);
   const send = async () => {
   if (!val.trim()) return;
-  if (!activeSession) {
-  const newId = crypto.randomUUID();
-  setActiveSession(newId);
-  localStorage.setItem("activeSession", newId);
+  let sessionId = activeSession;
 
-  const sessions = JSON.parse(localStorage.getItem("sessions") || "[]");
-
-  sessions.unshift({
-  id: newId,
-  title: "New Chat",
-  time: "now",
-  messages: [
-    {
-      role: "assistant",
-      content: "Hi! Upload a document above and ask me anything about it.",
-      time: "just now",
-      sources: [],
-    }
-  ]
-});
-
-  localStorage.setItem("sessions", JSON.stringify(sessions));
+if (!sessionId) {
+  sessionId = crypto.randomUUID();
+  setActiveSession(sessionId);
 }
   const q = val;
   setVal("");
@@ -512,7 +502,7 @@ useEffect(() => {
       body: JSON.stringify({
   question: q,
   top_k: 3,
-  session_id: activeSession,
+  session_id: sessionId,
   model: selectedModel
 }),
     });
@@ -531,6 +521,26 @@ useEffect(() => {
     let isMetrics = false;
 
     let firstTokenReceived = false;
+    // 🔥 NEW: smooth streaming buffer
+let buffer = "";
+
+// 🔥 NEW: interval for smooth typing
+const interval = setInterval(() => {
+  if (buffer.length > 0) {
+    const chunkSize = 3; // speed control
+    const next = buffer.slice(0, chunkSize);
+
+    buffer = buffer.slice(chunkSize);
+    fullText += next;
+
+    setMsgs(prev => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last) last.content = fullText;
+      return updated;
+    });
+  }
+}, 20); // speed (lower = faster)
     while (!done) {
       const { value, done: doneReading } = await reader.read();
       done = doneReading;
@@ -539,38 +549,59 @@ useEffect(() => {
 
       const chunk = decoder.decode(value);
 
-      if (chunk.includes("---METRICS---")) {
-        isMetrics = true;
-        continue;
-      }
+if (chunk.includes("---METRICS---")) {
+  const parts = chunk.split("---METRICS---");
 
-      if (!isMetrics) {
-        if (!firstTokenReceived) {
-          firstTokenReceived = true;
-          setMsgs(p => [
-            ...p.filter(m => !m.typing),
-            { role: "assistant", content: "", time: "now", sources: [] },
-          ]);
-        }
+  // before marker → normal text
+  if (parts[0]) {
+    buffer += parts[0];
+  }
 
-        fullText += chunk;
+  // after marker → metrics start
+  if (parts[1]) {
+    isMetrics = true;
+    metricsText += parts[1];
+  }
 
-        setMsgs(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last) last.content = fullText;
-          return updated;
-        });
+  continue;
+}
 
-      } else {
-        metricsText += chunk;
-      }
+if (!isMetrics) {
+
+  // 🔥 FIX: Replace typing bubble with real message
+  if (!firstTokenReceived) {
+    firstTokenReceived = true;
+
+    setMsgs(prev => [
+      ...prev.filter(m => !m.typing),
+      { role: "assistant", content: "", time: "now", sources: [] }
+    ]);
+  }
+
+  buffer += chunk;
+
+} else {
+  metricsText += chunk;
+}
     }
+    clearInterval(interval);
+    // 🔥 FLUSH REMAINING BUFFER (VERY IMPORTANT)
+if (buffer.length > 0) {
+  fullText += buffer;
 
+  setMsgs(prev => {
+    const updated = [...prev];
+    const last = updated[updated.length - 1];
+    if (last) last.content = fullText;
+    return updated;
+  });
+
+  buffer = "";
+}
     // Parse metrics safely
     if (metricsText) {
       try {
-        const metrics = JSON.parse(metricsText);
+        const metrics = JSON.parse(metricsText.trim());
 
         setMsgs(prev => {
           const updated = [...prev];
@@ -580,7 +611,7 @@ useEffect(() => {
             last.scores = {
               faithfulness: metrics.faithfulness ?? 0,
               answer_relevance: metrics.answer_relevance ?? 0,
-              context_recall: metrics.context_relevance ?? 0,
+              context_recall: metrics.context_relevance ?? 0, // OK (keep label)
               rag_quality: metrics.rag_quality_score ?? 0,
             };
           }
@@ -592,39 +623,7 @@ useEffect(() => {
         console.error("Metrics parse error:", err);
       }
     }
-const sessions = JSON.parse(localStorage.getItem("sessions") || "[]");
-
-// find session index
-const index = sessions.findIndex(s => s.id === activeSession);
-
-if (index !== -1) {
-  // ✅ update existing session
-  sessions[index].messages = [
-    ...(sessions[index].messages || []),
-
-    { role: "user", content: q, time: "now" },
-    { role: "assistant", content: fullText, time: "now" }
-  ];
-
-  // update title if first message
-  if (sessions[index].title === "New Chat") {
-    sessions[index].title = q.slice(0, 30);
-  }
-
-} else {
-  // ✅ fallback (should rarely happen)
-  sessions.push({
-    id: activeSession,
-    title: q.slice(0, 30),
-    time: "now",
-    messages: [
-      { role: "user", content: q },
-      { role: "assistant", content: fullText }
-    ]
-  });
-}
-
-localStorage.setItem("sessions", JSON.stringify(sessions));
+  await fetch("http://localhost:8000/sessions");
   } catch (err) {
     console.error("STREAM ERROR:", err);
 
@@ -669,8 +668,15 @@ localStorage.setItem("sessions", JSON.stringify(sessions));
 
       {/* Messages */}
       <div style={{ flex:1, overflowY:"auto", padding:"24px 28px", display:"flex", flexDirection:"column", gap:18 }}>
-        {msgs.map((msg, i) => <MessageBubble key={i} msg={msg} idx={i} theme={theme}/>)}
-        <div ref={bottomRef} />
+{msgs.map((msg, i) => (
+  <MessageBubble
+    key={i}
+    msg={msg}
+    idx={i}
+    theme={theme}
+    isLast={i === msgs.length - 1}
+  />
+))}        <div ref={bottomRef} />
       </div>
 
       {/* Input bar */}
@@ -709,6 +715,7 @@ localStorage.setItem("sessions", JSON.stringify(sessions));
                   if (m.includes("phi3:mini")) return "phi3";
                   if (m.includes("tinyllama:latest")) return "TinyLLaMA";
                   if (m.includes("llama3:8b-instruct-q4_0")) return "LLaMA 3";
+                  if (m.includes("groq:llama-3.3-70b-versatile")) return "LLaMA 70B ☁️";
                   return m;
                   })()}
                   </span>

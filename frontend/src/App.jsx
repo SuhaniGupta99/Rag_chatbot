@@ -6,9 +6,7 @@ import SourcesPanel from "./components/SourcesPanel";
 import SettingsPanel from "./components/SettingsPanel";
 
 export default function App() {
-  const [activeSession, setActiveSession] = useState(
-  localStorage.getItem("activeSession") || null
-);
+  const [activeSession, setActiveSession] = useState(null);
   const [view, setView] = useState("chat");
   const [uploadCollapsed, setUploadCollapsed] = useState(false);
   const [theme, setTheme] = useState(
@@ -17,6 +15,7 @@ export default function App() {
 useEffect(() => {
   localStorage.setItem("theme", theme);
 }, [theme]);
+
   return (
     <>
       <style>{`
