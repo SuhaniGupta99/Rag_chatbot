@@ -53,8 +53,12 @@ export default function SettingsPanel({ theme, setTheme }) {
   ];
 
   return (
-    <div style={{ flex:1, padding:"24px" }}>
-
+    <div style={{
+  flex:1,
+  padding:"24px",
+  overflowY:"auto",   // 🔥 THIS ENABLES SCROLL
+  height:"100%",      // 🔥 IMPORTANT
+}}>
       {/* 🔥 THEME SECTION */}
       <p style={{
         fontFamily:fonts.mono,
@@ -154,41 +158,79 @@ export default function SettingsPanel({ theme, setTheme }) {
 
 {/* TOP-K */}
 <div style={{ marginBottom:20 }}>
-  <p style={{ fontSize:13, color:theme.text, marginBottom:6 }}>
-    Top-K Retrieval: {topK}
-  </p>
+  <p style={{ fontSize:13, color:theme.text, marginBottom:4 }}>
+  Context Depth: {topK}
+</p>
+
+<p style={{
+  fontSize:11,
+  color:theme.textFaint,
+  marginBottom:8
+}}>
+  Controls how much document context is used
+</p>
   <input
-    type="range"
-    min="1"
-    max="8"
-    value={topK}
-    onChange={(e) => {
-      const val = Number(e.target.value);
-      setTopK(val);
-      localStorage.setItem("top_k", val);
-    }}
-    style={{ width:"100%" }}
-  />
+  type="range"
+  min="1"
+  max="8"
+  value={topK}
+  onChange={(e) => {
+    const val = Number(e.target.value);
+    setTopK(val);
+    localStorage.setItem("top_k", val);
+  }}
+  style={{ width:"100%" }}
+/>
+
+<div style={{
+  display:"flex",
+  justifyContent:"space-between",
+  fontSize:10,
+  color:theme.textFaint,
+  marginTop:4
+}}>
+  <span>Focused</span>
+  <span>Broad</span>
+</div>
 </div>
 
 {/* TEMPERATURE */}
 <div>
-  <p style={{ fontSize:13, color:theme.text, marginBottom:6 }}>
-    Temperature: {temperature.toFixed(2)}
-  </p>
+  <p style={{ fontSize:13, color:theme.text, marginBottom:4 }}>
+  Creativity: {temperature.toFixed(2)}
+</p>
+
+<p style={{
+  fontSize:11,
+  color:theme.textFaint,
+  marginBottom:8
+}}>
+  Controls how creative or precise the response is
+</p>
   <input
-    type="range"
-    min="0"
-    max="1"
-    step="0.05"
-    value={temperature}
-    onChange={(e) => {
-      const val = Number(e.target.value);
-      setTemperature(val);
-      localStorage.setItem("temperature", val);
-    }}
-    style={{ width:"100%" }}
-  />
+  type="range"
+  min="0"
+  max="1"
+  step="0.05"
+  value={temperature}
+  onChange={(e) => {
+    const val = Number(e.target.value);
+    setTemperature(val);
+    localStorage.setItem("temperature", val);
+  }}
+  style={{ width:"100%" }}
+/>
+
+<div style={{
+  display:"flex",
+  justifyContent:"space-between",
+  fontSize:10,
+  color:theme.textFaint,
+  marginTop:4
+}}>
+  <span>Precise</span>
+  <span>Creative</span>
+</div>
 </div>
     </div>
   );
