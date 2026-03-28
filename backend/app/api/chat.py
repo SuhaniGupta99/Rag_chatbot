@@ -35,6 +35,7 @@ SUMMARY_UPDATE_INTERVAL = 3
 class ChatRequest(BaseModel):
     question: str
     top_k: int = 3
+    temperature: float = 0.4
     session_id: str | None = None
     model: str | None = "phi3:mini"
 
@@ -172,7 +173,10 @@ Conversation:
 def chat(request: ChatRequest, db: Session = Depends(get_db)):
     try:
         embedding_service = EmbeddingService()
-        llm_service = LLMService(model=request.model)
+        llm_service = LLMService(
+            model=request.model,
+            temperature=request.temperature
+            )
         reranker = RerankerService()
 
         session_id = request.session_id or str(uuid.uuid4())
@@ -270,6 +274,11 @@ Answer clearly and concisely.
                     )
                     db.add(session)
                     db.commit()
+                else:
+                    # 🔥 update title ONLY if still default
+                    if session.title == "New Chat":
+                        session.title = request.question[:40]
+                        db.commit()
                 db.add(Message(
                     session_id=session_id,
                     role="user",

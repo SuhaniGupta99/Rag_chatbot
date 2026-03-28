@@ -407,6 +407,8 @@ export default function HomePage({
   const [files, setFiles] = useState([]);
   const [val, setVal]           = useState("");
   const selectedModel = localStorage.getItem("selectedModel") || "phi3:mini";
+  const topK = Number(localStorage.getItem("top_k") || 3);
+  const temperature = Number(localStorage.getItem("temperature") || 0.4);
   const [msgs, setMsgs]         = useState([
     {
       role:"assistant",
@@ -501,7 +503,8 @@ if (!sessionId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
   question: q,
-  top_k: 3,
+  top_k: topK,
+  temperature: temperature,
   session_id: sessionId,
   model: selectedModel
 }),

@@ -5,8 +5,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 class LLMService:
-    def __init__(self, model="phi3:mini"):
+    def __init__(self, model="phi3:mini", temperature=0.4):
         self.model = model
+        self.temperature = temperature
 
         # 🔥 Detect provider
         if model.startswith("groq:"):
@@ -32,7 +33,7 @@ class LLMService:
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 options={
-                    "temperature": 0.4,
+                    "temperature": self.temperature,
                     "num_predict": 800,
                     "top_p": 0.9
                 }
@@ -44,7 +45,7 @@ class LLMService:
             response = self.client.chat.completions.create(
                 model=self.actual_model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.4,
+                temperature=self.temperature,
                 max_tokens=800
             )
 
@@ -60,7 +61,7 @@ class LLMService:
                 messages=[{"role": "user", "content": prompt}],
                 stream=True,
                 options={
-                    "temperature": 0.4,
+                    "temperature": self.temperature,
                     "num_predict": 800,
                     "top_p": 0.9
                 }
@@ -74,7 +75,7 @@ class LLMService:
             stream = self.client.chat.completions.create(
                 model=self.actual_model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.4,
+                temperature=self.temperature,
                 max_tokens=800,
                 stream=True
             )

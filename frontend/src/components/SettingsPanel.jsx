@@ -4,11 +4,19 @@ import { fonts } from "../theme";
 export default function SettingsPanel({ theme, setTheme }) {
 
   const [model, setModel] = useState("phi3:mini");
+  const [topK, setTopK] = useState(3);
+  const [temperature, setTemperature] = useState(0.4);
 
-  useEffect(() => {
-    const saved = localStorage.getItem("selectedModel");
-    if (saved) setModel(saved);
-  }, []);
+ useEffect(() => {
+  const saved = localStorage.getItem("selectedModel");
+  if (saved) setModel(saved);
+
+  const savedTopK = localStorage.getItem("top_k");
+  if (savedTopK) setTopK(Number(savedTopK));
+
+  const savedTemp = localStorage.getItem("temperature");
+  if (savedTemp) setTemperature(Number(savedTemp));
+}, []);
 
   const handleChange = (m) => {
     setModel(m);
@@ -133,6 +141,55 @@ export default function SettingsPanel({ theme, setTheme }) {
         ))}
 
       </div>
+      {/* 🔥 RAG SETTINGS */}
+<p style={{
+  fontFamily:fonts.mono,
+  fontSize:10,
+  color:theme.textFaint,
+  marginTop:24,
+  marginBottom:10,
+}}>
+  RAG SETTINGS
+</p>
+
+{/* TOP-K */}
+<div style={{ marginBottom:20 }}>
+  <p style={{ fontSize:13, color:theme.text, marginBottom:6 }}>
+    Top-K Retrieval: {topK}
+  </p>
+  <input
+    type="range"
+    min="1"
+    max="8"
+    value={topK}
+    onChange={(e) => {
+      const val = Number(e.target.value);
+      setTopK(val);
+      localStorage.setItem("top_k", val);
+    }}
+    style={{ width:"100%" }}
+  />
+</div>
+
+{/* TEMPERATURE */}
+<div>
+  <p style={{ fontSize:13, color:theme.text, marginBottom:6 }}>
+    Temperature: {temperature.toFixed(2)}
+  </p>
+  <input
+    type="range"
+    min="0"
+    max="1"
+    step="0.05"
+    value={temperature}
+    onChange={(e) => {
+      const val = Number(e.target.value);
+      setTemperature(val);
+      localStorage.setItem("temperature", val);
+    }}
+    style={{ width:"100%" }}
+  />
+</div>
     </div>
   );
 }
