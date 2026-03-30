@@ -5,4 +5,5 @@ faiss-cpu
 sentence-transformers
 pypdf
 numpy
+python-docx
 
